@@ -13,7 +13,9 @@ reviews and lets you rate each comment as useful or not.
 - **Database**: Prisma 7 + PostgreSQL on Neon
   - `DATABASE_URL` (pooled) is used by the running app via `@prisma/adapter-pg` (`src/db.ts`)
   - `DIRECT_URL` (direct) is used by the Prisma CLI for migrations (`prisma.config.ts`)
-- **Dashboard**: Next.js (App Router) + Tailwind in `/web`, port 3001
+- **Dashboard**: Next.js (App Router) + Tailwind v4 + lucide-react in `/web`, port 3001.
+  Reads the API at `NEXT_PUBLIC_API_URL` (default `http://localhost:3000`).
+  The API only allows CORS from `DASHBOARD_ORIGIN` (default `http://localhost:3001`).
 
 ## Layout
 - `src/index.ts`: Express app, `/health`, `/webhook` (signature check), mounts `/api`
@@ -23,14 +25,21 @@ reviews and lets you rate each comment as useful or not.
 - `src/db.ts`: the shared Prisma client
 - `prisma/schema.prisma`: data models; `prisma/migrations/`: SQL history
 - `src/generated/prisma/`: generated client (git-ignored, created by `prisma generate`)
-- `web/`: the dashboard
+- `web/`: the dashboard (Next.js 16, App Router)
+  - `web/app/`: pages (`/`, `/reviews`, `/reviews/[id]`, `/settings`) and `loading.tsx` skeletons
+  - `web/components/`: UI pieces; `web/components/review/`: diff view and comment cards
+  - `web/lib/`: API client (`api.ts`), `useApi` hook, diff parser, time helpers
+  - Read `web/AGENTS.md` first: this Next.js version differs from older docs
+    (Cache Components is on, so `usePathname`/`useParams` need a `<Suspense>` boundary)
 
 ## Commands
 - `npm run dev`: start the server on port 3000 (watch mode)
 - `npm run db:migrate`: create/apply a migration after editing the schema
 - `npm run db:generate`: regenerate the Prisma client
 - `npm run db:studio`: browse the database in the browser
-- `npx tsc --noEmit`: type-check
+- `npx tsc --noEmit`: type-check the server
+- `cd web && npm run dev`: start the dashboard on port 3001
+- `cd web && npm run lint` / `npm run build`: check the dashboard
 
 ## Rules
 - **ESM**: the project is `"type": "module"`. Local imports must end in `.js`

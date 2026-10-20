@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+/* Design tokens. Each one becomes a Tailwind class: bg-canvas, text-muted, border-line... */
+@theme {
+  --color-canvas: #0c0a09;   /* page background */
+  --color-surface: #1c1917;  /* cards, panels */
+  --color-line: #292524;     /* 1px borders */
+  --color-fg: #fafaf9;       /* main text */
+  --color-muted: #a8a29e;    /* secondary text */
+  --color-accent: #f59e0b;   /* the one accent: links, focus, key numbers */
+}
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-fg);
+}
+
+/* Keyboard focus is always visible, in the accent colour */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: rgb(245 158 11 / 0.3);
+}

@@ -40,5 +40,7 @@
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
     "skipLibCheck": true,
-  }
+  },
+  // Only the server. The dashboard in /web has its own tsconfig.
+  "include": ["src", "prisma.config.ts"]
 }

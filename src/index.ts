@@ -52,7 +52,8 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 });
 
 // 7. JSON API for the dashboard. express.json is only used here, never on /webhook.
-app.use('/api', cors({ origin: 'http://localhost:3001' }), express.json(), apiRouter);
+const DASHBOARD_ORIGIN = process.env.DASHBOARD_ORIGIN ?? 'http://localhost:3001';
+app.use('/api', cors({ origin: DASHBOARD_ORIGIN }), express.json(), apiRouter);
 
 const PORT = process.env.PORT || 3000;
 
