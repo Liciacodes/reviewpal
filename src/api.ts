@@ -77,17 +77,23 @@ apiRouter.patch('/comments/:id/feedback', async (req, res) => {
 
 // GET /api/stats: totals and how useful the rated comments were
 apiRouter.get('/stats', async (req, res) => {
-  const [totalReviews, totalComments, useful, notUseful] = await Promise.all([
+  const [totalReviews, totalComments, useful, notUseful, bySeverity] = await Promise.all([
     prisma.review.count(),
     prisma.reviewComment.count(),
     prisma.reviewComment.count({ where: { feedback: 'useful' } }),
     prisma.reviewComment.count({ where: { feedback: 'not_useful' } }),
+    prisma.reviewComment.groupBy({ by: ['severity'], _count: true }),
   ]);
   const rated = useful + notUseful;
+
+  // groupBy only returns severities that exist, so start every count at 0
+  const counts = { bug: 0, risk: 0, style: 0 };
+  for (const row of bySeverity) counts[row.severity] = row._count;
 
   res.json({
     totalReviews,
     totalComments,
+    counts,
     usefulPercent: rated === 0 ? null : Math.round((useful / rated) * 100),
   });
 });

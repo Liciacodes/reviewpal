@@ -48,7 +48,7 @@ export function CommentCard({ comment, feedback, error, onFeedback }: { comment:
   return (
     <article
       aria-label={`${s.label} comment on line ${comment.line}`}
-      className={`rounded-md border border-l-2 border-line ${s.border} bg-surface p-4 font-sans`}
+      className={`rounded-md border border-l-2 border-line ${s.border} bg-surface p-3 font-sans sm:p-4`}
     >
       <div className="flex flex-wrap items-center gap-2">
         <SeverityBadge severity={comment.severity} />

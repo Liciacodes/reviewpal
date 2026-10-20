@@ -56,5 +56,6 @@ export type ReviewDetail = {
 export type Stats = {
   totalReviews: number;
   totalComments: number;
+  counts: SeverityCounts;
   usefulPercent: number | null; // null when nothing has been rated yet
 };

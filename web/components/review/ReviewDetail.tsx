@@ -96,7 +96,7 @@ function ReviewView({ review, onRefresh }: { review: Review; onRefresh: () => vo
           {review.repo.owner}/{review.repo.name} · #{review.prNumber} · {review.headSha.slice(0, 7)}
         </p>
         <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <h1 className="font-mono text-2xl font-semibold tracking-tight text-fg sm:text-3xl">{review.prTitle}</h1>
+          <h1 className="font-mono text-lg font-semibold leading-snug tracking-tight text-balance text-fg sm:text-xl">{review.prTitle}</h1>
           <a
             href={review.prUrl}
             target="_blank"
@@ -178,7 +178,7 @@ export function ReviewDetailSkeleton() {
     <LoadingRegion label="Loading review">
       <Skeleton className="mb-8 h-4 w-24" />
       <Skeleton className="h-3 w-56" />
-      <Skeleton className="mt-3 h-8 w-2/3" />
+      <Skeleton className="mt-3 h-6 w-2/3" />
       <div className="mt-4 flex gap-4">
         <Skeleton className="h-5 w-16 rounded-full" />
         <Skeleton className="h-5 w-40" />
