@@ -3,6 +3,9 @@ import { z } from 'zod';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
+// The model we use, defined once so the saved Review records the same value
+export const MODEL = process.env.GROQ_MODEL ?? 'openai/gpt-oss-120b';
+
 // 1. The exact shape we expect back from the AI
 const ReviewSchema = z.object({
   comments: z.array(
@@ -29,7 +32,7 @@ export async function reviewFiles(files: ChangedFile[]): Promise<Review> {
 
   // 3. Ask the AI for a review, in JSON only
   const completion = await groq.chat.completions.create({
-    model: process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile',
+    model: MODEL,
     response_format: { type: 'json_object' },
     temperature: 0.2,
     messages: [

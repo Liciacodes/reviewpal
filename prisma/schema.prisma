@@ -1,0 +1,89 @@
+// ReviewPal data model.
+// Connection URLs live in prisma.config.ts (CLI) and src/db.ts (app), not here (Prisma 7).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ReviewStatus {
+  pending
+  done
+  failed
+}
+
+enum Severity {
+  bug
+  risk
+  style
+}
+
+enum Feedback {
+  useful
+  not_useful
+}
+
+// A GitHub repository where the app is installed
+model Repo {
+  id             String   @id @default(cuid())
+  owner          String
+  name           String
+  installationId Int
+  createdAt      DateTime @default(now())
+  reviews        Review[]
+
+  @@unique([owner, name])
+}
+
+// One AI review of one commit (headSha) of a pull request
+model Review {
+  id           String          @id @default(cuid())
+  repoId       String
+  repo         Repo            @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  prNumber     Int
+  prTitle      String
+  prUrl        String
+  headSha      String
+  status       ReviewStatus    @default(pending)
+  errorMessage String?         @db.Text
+  model        String
+  filesChanged Int             @default(0)
+  createdAt    DateTime        @default(now())
+  files        ReviewFile[]
+  comments     ReviewComment[]
+
+  // GitHub can redeliver a webhook: never review the same commit twice
+  @@unique([repoId, prNumber, headSha])
+  @@index([createdAt])
+}
+
+// A changed file in the PR, with its diff
+model ReviewFile {
+  id       String  @id @default(cuid())
+  reviewId String
+  review   Review  @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  filename String
+  status   String
+  patch    String? @db.Text // binary or huge files have no patch
+
+  @@index([reviewId])
+}
+
+// One comment from the AI, plus the human rating of it
+model ReviewComment {
+  id        String    @id @default(cuid())
+  reviewId  String
+  review    Review    @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  path      String
+  line      Int
+  severity  Severity
+  body      String    @db.Text
+  feedback  Feedback?
+  createdAt DateTime  @default(now())
+
+  @@index([reviewId])
+}

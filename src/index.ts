@@ -2,8 +2,10 @@ import 'dotenv/config';
 import express from 'express';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import cors from 'cors';
 import { App } from 'octokit';
-import { reviewFiles } from './review.js';
+import { apiRouter } from './api.js';
+import { runReview } from './pipeline.js';
 
 const app = express();
 
@@ -43,33 +45,14 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
   // 5. Reply to GitHub quickly, then do the slow work
   res.status(200).send('ok');
 
-  // 6. When a PR is opened or updated, fetch the changed files
+  // 6. When a PR is opened or updated, run the review (it saves everything and never throws)
   if (event === 'pull_request' && ['opened', 'synchronize'].includes(payload.action)) {
-    try {
-      const octokit = await githubApp.getInstallationOctokit(payload.installation.id);
-      const { data: files } = await octokit.request(
-        'GET /repos/{owner}/{repo}/pulls/{pull_number}/files',
-        {
-          owner: payload.repository.owner.login,
-          repo: payload.repository.name,
-          pull_number: payload.pull_request.number,
-        }
-      );
-
-      for (const file of files) {
-        console.log(`--- ${file.filename} (${file.status})`);
-        console.log(file.patch);
-             
-      }
-       const review = await reviewFiles(files);
-      console.log('AI review:', JSON.stringify(review, null, 2));
-    }
-    
-    catch (err) {
-      console.error('Review failed:', err);
-    }
+    await runReview(githubApp, payload);
   }
 });
+
+// 7. JSON API for the dashboard. express.json is only used here, never on /webhook.
+app.use('/api', cors({ origin: 'http://localhost:3001' }), express.json(), apiRouter);
 
 const PORT = process.env.PORT || 3000;
 
