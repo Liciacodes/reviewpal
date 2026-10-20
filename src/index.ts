@@ -3,6 +3,7 @@ import express from 'express';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { App } from 'octokit';
+import { reviewFiles } from './review.js';
 
 const app = express();
 
@@ -58,9 +59,14 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
       for (const file of files) {
         console.log(`--- ${file.filename} (${file.status})`);
         console.log(file.patch);
+             
       }
-    } catch (err) {
-      console.error('Failed to fetch PR files:', err);
+       const review = await reviewFiles(files);
+      console.log('AI review:', JSON.stringify(review, null, 2));
+    }
+    
+    catch (err) {
+      console.error('Review failed:', err);
     }
   }
 });
