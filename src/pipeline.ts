@@ -1,6 +1,7 @@
 import type { App } from 'octokit';
 import { prisma } from './db.js';
 import { Prisma } from './generated/prisma/client.js';
+import { postReviewToGitHub } from './github.js';
 import { MODEL, reviewFiles } from './review.js';
 
 // The parts of the GitHub pull_request webhook payload we use
@@ -79,8 +80,12 @@ export async function runReview(githubApp: App, payload: PullRequestPayload): Pr
     });
 
     console.log(`Reviewed ${label}: ${files.length} files, ${result.comments.length} comments`);
+
+    // 5. Post the comments on the pull request. It saves its own error and never throws,
+    //    so a failed post leaves the review "done".
+    await postReviewToGitHub(octokit, reviewId);
   } catch (err) {
-    // 5. Something failed: record it on the review (if we got that far)
+    // 6. Something failed: record it on the review (if we got that far)
     console.error(`Review failed for ${label}:`, err);
     if (!reviewId) return;
     try {

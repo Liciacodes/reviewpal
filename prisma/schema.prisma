@@ -53,6 +53,12 @@ model Review {
   model        String
   filesChanged Int             @default(0)
   createdAt    DateTime        @default(now())
+
+  // Posting the review to the GitHub pull request
+  githubReviewId String?   // GitHub's id for the review we posted (set = already posted). A string because the ids are bigger than Int.
+  postedAt       DateTime?
+  postError      String?   @db.Text // why posting failed (the review itself can still be "done")
+
   files        ReviewFile[]
   comments     ReviewComment[]
 
