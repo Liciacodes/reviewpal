@@ -90,7 +90,7 @@ function ReviewsTable({ reviews }: { reviews: ReviewSummary[] }) {
                 <div className="mt-1"><TitleLink review={review} /></div>
               </td>
               <td className="px-4 py-4"><StatusBadge status={review.status} /></td>
-              <td className="px-4 py-4"><SeverityCounts counts={review.counts} /></td>
+              <td className="px-4 py-4"><SeverityCounts counts={review.counts} status={review.status} /></td>
               <td className="whitespace-nowrap px-4 py-4 text-right text-muted">
                 <RelativeTime iso={review.createdAt} />
               </td>
@@ -119,7 +119,7 @@ function ReviewsTable({ reviews }: { reviews: ReviewSummary[] }) {
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <StatusBadge status={review.status} />
-              <SeverityCounts counts={review.counts} />
+              <SeverityCounts counts={review.counts} status={review.status} />
             </div>
           </li>
         ))}

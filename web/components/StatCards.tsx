@@ -2,9 +2,9 @@
 
 import type { ReactNode } from "react";
 import { getStats } from "@/lib/api";
-import type { Severity, SeverityCounts } from "@/lib/types";
+import type { SeverityCounts } from "@/lib/types";
 import { useApi } from "@/lib/use-api";
-import { SEVERITY } from "./badges";
+import { presentSeverities, SEVERITY, severityWord } from "./badges";
 import { ErrorState, LoadingRegion, Skeleton } from "./states";
 
 function StatCard({ label, value, hint }: { label: string; value: string; hint?: ReactNode }) {
@@ -17,15 +17,15 @@ function StatCard({ label, value, hint }: { label: string; value: string; hint?:
   );
 }
 
-// "1 bug · 1 risk · 1 style", each in its severity colour (dimmed when zero)
+// "2 bugs · 3 styles", each in its severity colour. Zero counts are left out.
 function SeverityLine({ counts }: { counts: SeverityCounts }) {
   return (
     <span className="font-mono">
-      {(Object.keys(SEVERITY) as Severity[]).map((key, i) => (
+      {presentSeverities(counts).map((key, i) => (
         <span key={key}>
           {i > 0 && <span aria-hidden> · </span>}
-          <span className={counts[key] > 0 ? SEVERITY[key].text : undefined}>
-            {counts[key]} {SEVERITY[key].label.toLowerCase()}
+          <span className={SEVERITY[key].text}>
+            {counts[key]} {severityWord(key, counts[key])}
           </span>
         </span>
       ))}

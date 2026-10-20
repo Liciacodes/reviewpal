@@ -49,6 +49,9 @@ export type ReviewDetail = {
   model: string;
   filesChanged: number;
   createdAt: string;
+  githubReviewId: string | null; // set once the review is posted on the pull request
+  postedAt: string | null;
+  postError: string | null;      // why posting to GitHub failed
   files: ReviewFile[];
   comments: ReviewComment[];
 };

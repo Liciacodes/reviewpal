@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Clock, ExternalLink, FileCode, GitPullRequest, RefreshCw, TriangleAlert } from "lucide-react";
+import { ArrowLeft, CircleCheck, Clock, ExternalLink, FileCode, GitPullRequest, RefreshCw, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { use, useState } from "react";
 import { getReview, setFeedback } from "@/lib/api";
@@ -113,11 +113,38 @@ function ReviewView({ review, onRefresh }: { review: Review; onRefresh: () => vo
           <span className="font-mono text-xs">
             {review.filesChanged} {review.filesChanged === 1 ? "file" : "files"}
           </span>
-          <SeverityCounts counts={counts} />
+          <SeverityCounts counts={counts} status={review.status} />
           <RelativeTime iso={review.createdAt} className="text-xs" />
           <span className="font-mono text-xs">{review.model}</span>
         </div>
+        {review.githubReviewId && (
+          <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+            <CircleCheck aria-hidden className="size-3.5 text-emerald-400" />
+            <span className="text-fg">Posted to GitHub</span>
+            {review.postedAt && <RelativeTime iso={review.postedAt} />}
+            <a
+              href={`${review.prUrl}#pullrequestreview-${review.githubReviewId}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-accent transition-colors duration-150 hover:text-amber-300"
+            >
+              View on pull request
+              <ExternalLink aria-hidden className="size-3.5" />
+              <span className="sr-only">(opens in a new tab)</span>
+            </a>
+          </p>
+        )}
       </header>
+
+      {review.postError && (
+        <div className="mb-8 flex gap-3 rounded-lg border border-red-400/30 bg-red-400/5 p-4">
+          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-red-400" />
+          <div className="min-w-0">
+            <p className="font-mono text-sm text-fg">Couldn&apos;t post to GitHub</p>
+            <p className="mt-1 text-sm text-muted [overflow-wrap:anywhere]">{review.postError}</p>
+          </div>
+        </div>
+      )}
 
       {review.status === "failed" && (
         <div role="alert" className="mb-8 flex gap-3 rounded-lg border border-red-400/30 bg-red-400/5 p-4">

@@ -19,13 +19,33 @@ export function SeverityBadge({ severity }: { severity: Severity }) {
   );
 }
 
-// Compact "2 bug · 1 risk · 0 style" counts. Zero counts are dimmed but still readable.
-export function SeverityCounts({ counts }: { counts: Counts }) {
+// "bug" or "bugs" for a count: 1 bug, 2 bugs, 0 bugs
+export function severityWord(severity: Severity, count: number): string {
+  const word = SEVERITY[severity].label.toLowerCase();
+  return count === 1 ? word : `${word}s`;
+}
+
+// The severities with at least one comment, in display order (bug, risk, style)
+export function presentSeverities(counts: Counts): Severity[] {
+  return (Object.keys(SEVERITY) as Severity[]).filter((key) => counts[key] > 0);
+}
+
+// Compact "2 bugs · 1 risk" counts. Zero counts are left out.
+// With no comments at all: "Reviewing…" while pending, nothing if failed (the badge says so), else "No comments".
+export function SeverityCounts({ counts, status }: { counts: Counts; status: ReviewStatus }) {
+  const present = presentSeverities(counts);
+  if (present.length === 0) {
+    if (status === "failed") return null;
+    return (
+      <span className="font-mono text-xs text-muted">{status === "pending" ? "Reviewing…" : "No comments"}</span>
+    );
+  }
+
   return (
     <ul className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs" aria-label="Comments by severity">
-      {(Object.keys(SEVERITY) as Severity[]).map((key) => (
-        <li key={key} className={counts[key] > 0 ? SEVERITY[key].text : "text-muted"}>
-          <span className="tabular-nums">{counts[key]}</span> {SEVERITY[key].label.toLowerCase()}
+      {present.map((key) => (
+        <li key={key} className={SEVERITY[key].text}>
+          <span className="tabular-nums">{counts[key]}</span> {severityWord(key, counts[key])}
         </li>
       ))}
     </ul>
