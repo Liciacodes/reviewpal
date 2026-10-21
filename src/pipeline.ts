@@ -76,7 +76,7 @@ export async function runReview(githubApp: App, payload: PullRequestPayload): Pr
 
     await prisma.review.update({
       where: { id: reviewId },
-      data: { status: 'done', filesChanged: files.length },
+      data: { status: 'done', filesChanged: files.length, notReviewed: result.notReviewed },
     });
 
     console.log(`Reviewed ${label}: ${files.length} files, ${result.comments.length} comments`);

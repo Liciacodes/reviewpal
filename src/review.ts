@@ -1,5 +1,6 @@
 import Groq from 'groq-sdk';
 import { z } from 'zod';
+import { buildDiff, type NotReviewed } from './diff.js';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
@@ -18,17 +19,20 @@ const ReviewSchema = z.object({
   ),
 });
 
-export type Review = z.infer<typeof ReviewSchema>;
+// The most diff text we send per review (characters), to control cost
+const DIFF_BUDGET = 12000;
 
-type ChangedFile = { filename: string; patch?: string };
+export type Review = z.infer<typeof ReviewSchema> & { notReviewed: NotReviewed[] };
+
+type ChangedFile = { filename: string; status?: string; patch?: string };
 
 export async function reviewFiles(files: ChangedFile[]): Promise<Review> {
-  // 2. Turn the changed files into one text, and cap the size to control cost
-  const diffText = files
-    .filter((f) => f.patch)
-    .map((f) => `File: ${f.filename}\n${f.patch}`)
-    .join('\n\n')
-    .slice(0, 12000);
+  // 2. Turn the changed files into one numbered text, sharing the budget fairly.
+  //    Lock files, generated files and anything that doesn't fit are recorded in notReviewed.
+  const { text: diffText, notReviewed } = buildDiff(files, DIFF_BUDGET);
+
+  // Nothing left to review (e.g. only a lock file changed): don't call the AI
+  if (!diffText) return { comments: [], notReviewed };
 
   // 3. Ask the AI for a review, in JSON only
   const completion = await groq.chat.completions.create({
@@ -39,11 +43,14 @@ export async function reviewFiles(files: ChangedFile[]): Promise<Review> {
       {
         role: 'system',
         content:
-          'You are a careful senior code reviewer. Review only the added lines (starting with +). ' +
+          'You are a careful senior code reviewer. ' +
+          'Each file starts with "File: <path>". Every line of the new version starts with its line number, ' +
+          'then "+" for an added line or a space for an unchanged line. Removed lines have no number and start with "-". ' +
+          'Only comment on added (+) lines. ' +
           'Return at most 5 comments that are specific and useful: real bugs, risks, or clear style problems. ' +
           'If nothing is worth saying, return an empty list. ' +
           'Respond ONLY with JSON: {"comments":[{"path":string,"line":number,"severity":"bug"|"risk"|"style","body":string}]}. ' +
-          '"line" is the line number in the new version of the file.',
+          '"line" is the number shown at the start of the line you are commenting on: copy it, never count lines yourself.',
       },
       { role: 'user', content: diffText },
     ],
@@ -51,5 +58,5 @@ export async function reviewFiles(files: ChangedFile[]): Promise<Review> {
 
   // 4. Check the answer has the right shape before trusting it
   const raw = completion.choices[0]?.message?.content ?? '{"comments":[]}';
-  return ReviewSchema.parse(JSON.parse(raw));
+  return { ...ReviewSchema.parse(JSON.parse(raw)), notReviewed };
 }

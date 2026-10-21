@@ -1,28 +1,14 @@
 import type { Octokit } from 'octokit';
 import { prisma } from './db.js';
+import { newSideLines, type NotReviewed } from './diff.js';
 import type { Severity } from './generated/prisma/client.js';
 
 const LABEL: Record<Severity, string> = { bug: 'Bug', risk: 'Risk', style: 'Style' };
 const FOOTER = '<sub>Reviewed by ReviewPal</sub>';
 
-const HUNK_HEADER = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
-
-// The new-file line numbers that appear in a patch: the only lines GitHub accepts
-// for an inline comment with side "RIGHT". Same counting as parsePatch in web/lib/diff.ts:
-// "+" and unchanged lines move the new-file counter, "-" lines don't.
-export function newSideLines(patch: string): Set<number> {
-  const lines = new Set<number>();
-  const rows = patch.split('\n');
-  if (rows.at(-1) === '') rows.pop(); // trailing newline, not a real line
-
-  let newLine = 0;
-  for (const raw of rows) {
-    const header = HUNK_HEADER.exec(raw);
-    if (header) newLine = Number(header[1]);
-    else if (raw.startsWith('-') || raw.startsWith('\\')) continue; // removed line, or "\ No newline at end of file"
-    else lines.add(newLine++); // added or unchanged line
-  }
-  return lines;
+// "Not reviewed: package-lock.json (lock file), big.ts (too large)"
+export function notReviewedNote(files: NotReviewed[]): string {
+  return `Not reviewed: ${files.map((f) => `\`${f.filename}\` (${f.reason})`).join(', ')}`;
 }
 
 // "**Bug**: the comment"
@@ -73,9 +59,13 @@ export async function postReviewToGitHub(octokit: Octokit, reviewId: string): Pr
       }
     }
 
+    // Saved by runReview as JSON: the files the AI never saw, and why
+    const notReviewed = (review.notReviewed ?? []) as NotReviewed[];
+
     const body = [
       summary(review.comments),
       ...(outside.length > 0 ? ['**Comments on lines outside the diff:**', outside.join('\n')] : []),
+      ...(notReviewed.length > 0 ? [notReviewedNote(notReviewed)] : []),
       FOOTER,
     ].join('\n\n');
 
