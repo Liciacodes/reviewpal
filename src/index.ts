@@ -1,10 +1,11 @@
 import 'dotenv/config';
+import cookieParser from 'cookie-parser';
 import express from 'express';
 import crypto from 'node:crypto';
-import fs from 'node:fs';
-import cors from 'cors';
-import { App } from 'octokit';
 import { apiRouter } from './api.js';
+import { authRouter } from './auth/routes.js';
+import { requireCsrf, requireUser } from './auth/session.js';
+import { githubApp } from './github-app.js';
 import { runReview } from './pipeline.js';
 
 const app = express();
@@ -12,15 +13,9 @@ const app = express();
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 if (!WEBHOOK_SECRET) throw new Error('WEBHOOK_SECRET is missing');
 
-const githubApp = new App({
-  appId: process.env.GITHUB_APP_ID!,
-  privateKey: fs.readFileSync(process.env.GITHUB_PRIVATE_KEY_PATH!, 'utf8'),
-});
-
 app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
-
 app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   // 1. The signature GitHub sent
   const signature = req.header('x-hub-signature-256') ?? '';
@@ -51,9 +46,13 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
   }
 });
 
-// 7. JSON API for the dashboard. express.json is only used here, never on /webhook.
-const DASHBOARD_ORIGIN = process.env.DASHBOARD_ORIGIN ?? 'http://localhost:3001';
-app.use('/api', cors({ origin: DASHBOARD_ORIGIN }), express.json(), apiRouter);
+// 7. Sign in / sign out with GitHub. The dashboard forwards /auth/* here (Next.js rewrites),
+//    so the browser only ever talks to the dashboard's domain and no CORS is needed.
+app.use('/auth', cookieParser(), authRouter);
+
+// 8. JSON API for the dashboard: signed-in users only, and changes need the CSRF token.
+//    express.json is only used here, never on /webhook.
+app.use('/api', cookieParser(), express.json(), requireUser, requireCsrf, apiRouter);
 
 const PORT = process.env.PORT || 3000;
 

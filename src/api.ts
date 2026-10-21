@@ -1,13 +1,35 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
+import { canAccessRepo, visibleRepoIds } from './auth/access.js';
+import type { Auth } from './auth/session.js';
 import { prisma } from './db.js';
 import { Prisma } from './generated/prisma/client.js';
 
+// Every route here runs after requireUser (see index.ts), so req.auth is always set.
+// Users only ever see reviews of repos they can access; anything else is "not found".
 export const apiRouter = express.Router();
 
-// GET /api/reviews: the 50 newest reviews with comment counts
+function auth(req: Request): Auth {
+  if (!req.auth) throw new Error('requireUser must run before the API routes');
+  return req.auth;
+}
+
+// The ids of the repos in our database that this user may see
+async function myRepoIds(req: Request): Promise<string[]> {
+  const repos = await prisma.repo.findMany({ select: { id: true, owner: true, name: true, installationId: true } });
+  return visibleRepoIds(repos, auth(req).allowed);
+}
+
+// GET /api/me: who is signed in (for the sidebar)
+apiRouter.get('/me', (req, res) => {
+  const { login, name, avatarUrl } = auth(req).user;
+  res.json({ login, name, avatarUrl });
+});
+
+// GET /api/reviews: the 50 newest reviews the user can see, with comment counts
 apiRouter.get('/reviews', async (req, res) => {
   const reviews = await prisma.review.findMany({
+    where: { repoId: { in: await myRepoIds(req) } },
     orderBy: { createdAt: 'desc' },
     take: 50,
     include: {
@@ -41,13 +63,17 @@ apiRouter.get('/reviews/:id', async (req, res) => {
   const review = await prisma.review.findUnique({
     where: { id: req.params.id },
     include: {
-      repo: { select: { owner: true, name: true } },
+      repo: { select: { owner: true, name: true, installationId: true } },
       files: { orderBy: { filename: 'asc' } },
       comments: { orderBy: [{ path: 'asc' }, { line: 'asc' }] },
     },
   });
-  if (!review) return res.status(404).json({ error: 'Review not found' });
-  res.json(review);
+  // 404, not 403, for reviews the user can't see: don't reveal that they exist
+  if (!review || !canAccessRepo(auth(req).allowed, review.repo)) {
+    return res.status(404).json({ error: 'Review not found' });
+  }
+  const { repo: { installationId: _installationId, ...repo }, ...rest } = review;
+  res.json({ ...rest, repo });
 });
 
 // PATCH /api/comments/:id/feedback: rate a comment
@@ -60,7 +86,16 @@ apiRouter.patch('/comments/:id/feedback', async (req, res) => {
     return res.status(400).json({ error: 'Invalid body', issues: parsed.error.issues });
   }
 
-  // 2. Save it. P2025 means "no row with that id".
+  // 2. Only comments on reviews the user can see (404 otherwise, like a missing comment)
+  const existing = await prisma.reviewComment.findUnique({
+    where: { id: req.params.id },
+    select: { review: { select: { repo: { select: { owner: true, name: true, installationId: true } } } } },
+  });
+  if (!existing || !canAccessRepo(auth(req).allowed, existing.review.repo)) {
+    return res.status(404).json({ error: 'Comment not found' });
+  }
+
+  // 3. Save it. P2025 means "no row with that id" (deleted in the meantime).
   try {
     const comment = await prisma.reviewComment.update({
       where: { id: req.params.id },
@@ -75,14 +110,16 @@ apiRouter.patch('/comments/:id/feedback', async (req, res) => {
   }
 });
 
-// GET /api/stats: totals and how useful the rated comments were
+// GET /api/stats: totals and how useful the rated comments were, for the user's repos only
 apiRouter.get('/stats', async (req, res) => {
+  const repoIds = await myRepoIds(req);
+  const mine = { review: { repoId: { in: repoIds } } };
   const [totalReviews, totalComments, useful, notUseful, bySeverity] = await Promise.all([
-    prisma.review.count(),
-    prisma.reviewComment.count(),
-    prisma.reviewComment.count({ where: { feedback: 'useful' } }),
-    prisma.reviewComment.count({ where: { feedback: 'not_useful' } }),
-    prisma.reviewComment.groupBy({ by: ['severity'], _count: true }),
+    prisma.review.count({ where: { repoId: { in: repoIds } } }),
+    prisma.reviewComment.count({ where: mine }),
+    prisma.reviewComment.count({ where: { ...mine, feedback: 'useful' } }),
+    prisma.reviewComment.count({ where: { ...mine, feedback: 'not_useful' } }),
+    prisma.reviewComment.groupBy({ by: ['severity'], where: mine, _count: true }),
   ]);
   const rated = useful + notUseful;
 
@@ -100,6 +137,6 @@ apiRouter.get('/stats', async (req, res) => {
 
 // Any unexpected error in the routes above ends up here (Express 5 forwards async errors)
 apiRouter.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
-  console.error('API error:', err);
+  console.error(`API error: ${err instanceof Error ? err.message : String(err)}`);
   res.status(500).json({ error: 'Internal server error' });
 });

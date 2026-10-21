@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Sidebar } from "@/components/Sidebar";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -28,12 +27,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         >
           Skip to content
         </a>
-        <Sidebar />
-        <div className="md:pl-60">
-          <main id="main" className="mx-auto max-w-[1200px] px-4 py-8 sm:px-8 md:py-12 lg:px-12">
-            {children}
-          </main>
-        </div>
+        {/* The sidebar lives in app/(dashboard)/layout.tsx; /sign-in has none. Both have <main id="main">. */}
+        {children}
       </body>
     </html>
   );

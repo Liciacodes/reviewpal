@@ -56,6 +56,13 @@ export type ReviewDetail = {
   comments: ReviewComment[];
 };
 
+// The signed-in user (GET /api/me)
+export type Me = {
+  login: string;
+  name: string | null;
+  avatarUrl: string | null;
+};
+
 export type Stats = {
   totalReviews: number;
   totalComments: number;

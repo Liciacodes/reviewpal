@@ -1,9 +1,12 @@
 "use client";
 
-import { GitPullRequest, LayoutDashboard, Menu, ScanSearch, Settings, X } from "lucide-react";
+import { GitPullRequest, LayoutDashboard, LogOut, Menu, ScanSearch, Settings, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { getMe, signOut } from "@/lib/api";
+import { useApi } from "@/lib/use-api";
+import { Skeleton } from "./states";
 
 const NAV = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
@@ -55,7 +58,7 @@ function Nav(props: { onNavigate?: () => void }) {
   );
 }
 
-function Logo() {
+export function Logo() {
   return (
     <Link href="/" className="flex items-center gap-2.5 rounded-md">
       <span className="flex size-7 items-center justify-center rounded-md border border-line bg-surface">
@@ -63,6 +66,60 @@ function Logo() {
       </span>
       <span className="font-mono text-sm font-semibold tracking-tight text-fg">reviewpal</span>
     </Link>
+  );
+}
+
+// The signed-in user, with a Sign out button
+function UserMenu() {
+  const { data: me, loading } = useApi("me", getMe);
+  const [signingOut, setSigningOut] = useState(false);
+  const [error, setError] = useState<string>();
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    setError(undefined);
+    try {
+      await signOut(); // goes to /sign-in when done
+    } catch {
+      setSigningOut(false);
+      setError("Couldn't sign out. Try again.");
+    }
+  }
+
+  if (loading || !me) {
+    return (
+      <div className="flex items-center gap-2.5 px-3 py-2" aria-hidden>
+        <Skeleton className="size-6 rounded-full" />
+        <Skeleton className="h-3.5 w-24" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-3">
+      <div className="flex items-center gap-2.5">
+        {me.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- a 24px GitHub avatar doesn't need next/image
+          <img src={me.avatarUrl} alt="" width={24} height={24} className="size-6 shrink-0 rounded-full border border-line" />
+        ) : (
+          <span aria-hidden className="size-6 shrink-0 rounded-full border border-line bg-surface" />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm text-fg">{me.name ?? me.login}</p>
+          {me.name && <p className="truncate font-mono text-xs text-muted">{me.login}</p>}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={handleSignOut}
+        disabled={signingOut}
+        className="mt-3 inline-flex items-center gap-2 rounded-md text-sm text-muted transition-colors duration-150 hover:text-fg disabled:opacity-60"
+      >
+        <LogOut aria-hidden className="size-4" />
+        {signingOut ? "Signing out…" : "Sign out"}
+      </button>
+      {error && <p role="status" className="mt-2 text-xs text-red-400">{error}</p>}
+    </div>
   );
 }
 
@@ -85,6 +142,9 @@ export function Sidebar() {
         <nav aria-label="Main" className="mt-10">
           <Nav />
         </nav>
+        <div className="mt-auto border-t border-line pt-4">
+          <UserMenu />
+        </div>
       </aside>
 
       {/* Mobile: top bar with a menu button */}
@@ -105,6 +165,9 @@ export function Sidebar() {
         {open && (
           <nav id="mobile-nav" aria-label="Main" className="border-t border-line px-4 py-3">
             <Nav onNavigate={() => setOpen(false)} />
+            <div className="mt-3 border-t border-line pt-3">
+              <UserMenu />
+            </div>
           </nav>
         )}
       </div>

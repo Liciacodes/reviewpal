@@ -94,3 +94,32 @@ model ReviewComment {
 
   @@index([reviewId])
 }
+
+// Someone who signed in to the dashboard with GitHub
+model User {
+  id                 String    @id @default(cuid())
+  githubId           String    @unique // a string, like githubReviewId: GitHub ids can outgrow Int
+  login              String
+  name               String?
+  avatarUrl          String?
+  accessToken        String    @db.Text // GitHub user token, AES-256-GCM encrypted (see src/auth/crypto.ts)
+  accessTokenExpires DateTime?
+  refreshToken       String?   @db.Text // encrypted too
+  allowedRepos       Json? // cache of [{ installationId, fullName }] the user can see
+  accessCheckedAt    DateTime? // when allowedRepos was last fetched from GitHub
+  createdAt          DateTime  @default(now())
+  sessions           Session[]
+}
+
+// A signed-in browser. The cookie holds a random token; we only store its SHA-256 hash.
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  csrfToken String // must come back in the X-CSRF-Token header on changes
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
