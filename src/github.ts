@@ -1,34 +1,7 @@
 import type { Octokit } from 'octokit';
 import { prisma } from './db.js';
-import { newSideLines, type NotReviewed } from './diff.js';
-import type { Severity } from './generated/prisma/client.js';
-
-const LABEL: Record<Severity, string> = { bug: 'Bug', risk: 'Risk', style: 'Style' };
-const FOOTER = '<sub>Reviewed by ReviewPal</sub>';
-
-// "Not reviewed: package-lock.json (lock file), big.ts (too large)"
-export function notReviewedNote(files: NotReviewed[]): string {
-  return `Not reviewed: ${files.map((f) => `\`${f.filename}\` (${f.reason})`).join(', ')}`;
-}
-
-// "**Bug**: the comment"
-function formatComment(c: { severity: Severity; body: string }): string {
-  return `**${LABEL[c.severity]}**: ${c.body}`;
-}
-
-// "1 bug", "2 bugs"
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? '' : 's'}`;
-}
-
-// "ReviewPal found 3 things: 1 bug, 1 risk, 1 style." (zero counts are left out)
-function summary(comments: { severity: Severity }[]): string {
-  const parts = (Object.keys(LABEL) as Severity[])
-    .map((s) => [s, comments.filter((c) => c.severity === s).length] as const)
-    .filter(([, n]) => n > 0)
-    .map(([s, n]) => plural(n, s));
-  return `ReviewPal found ${plural(comments.length, 'thing')}: ${parts.join(', ')}.`;
-}
+import type { NotReviewed } from './diff.js';
+import { reviewBody, splitComments } from './review-body.js';
 
 // Posts the saved AI comments as ONE review on the GitHub pull request.
 // Never throws: a failure is logged and saved in review.postError.
@@ -42,32 +15,12 @@ export async function postReviewToGitHub(octokit: Octokit, reviewId: string): Pr
     // Already posted (never post twice), or nothing to say
     if (review.githubReviewId || review.comments.length === 0) return;
 
-    // Which lines of each file GitHub will accept a comment on
-    const allowed = new Map<string, Set<number>>();
-    for (const f of review.files) {
-      if (f.patch) allowed.set(f.filename, newSideLines(f.patch));
-    }
-
-    // Comments on allowed lines go inline; the rest are listed in the review body
-    const inline: { path: string; line: number; side: 'RIGHT'; body: string }[] = [];
-    const outside: string[] = [];
-    for (const c of review.comments) {
-      if (allowed.get(c.path)?.has(c.line)) {
-        inline.push({ path: c.path, line: c.line, side: 'RIGHT', body: formatComment(c) });
-      } else {
-        outside.push(`- \`${c.path}:${c.line}\` - ${formatComment(c)}`);
-      }
-    }
+    // Comments on lines in the diff go inline; the rest are listed in the review text
+    const { inline, outside } = splitComments(review.comments, review.files);
 
     // Saved by runReview as JSON: the files the AI never saw, and why
     const notReviewed = (review.notReviewed ?? []) as NotReviewed[];
-
-    const body = [
-      summary(review.comments),
-      ...(outside.length > 0 ? ['**Comments on lines outside the diff:**', outside.join('\n')] : []),
-      ...(notReviewed.length > 0 ? [notReviewedNote(notReviewed)] : []),
-      FOOTER,
-    ].join('\n\n');
+    const body = reviewBody(review.comments, outside, notReviewed);
 
     const { data } = await octokit.request('POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews', {
       owner: review.repo.owner,
