@@ -54,6 +54,7 @@ model Review {
   filesChanged Int             @default(0)
   notReviewed  Json?           // files the AI did not see: [{ filename, reason }] (lock file, too large...)
   createdAt    DateTime        @default(now())
+  startedAt    DateTime        @default(now()) // when the current run began (reset by "Re-run"); used to find stuck reviews
 
   // Posting the review to the GitHub pull request
   githubReviewId String?   // GitHub's id for the review we posted (set = already posted). A string because the ids are bigger than Int.

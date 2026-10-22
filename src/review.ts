@@ -1,8 +1,14 @@
 import Groq from 'groq-sdk';
 import { z } from 'zod';
 import { buildDiff, type NotReviewed } from './diff.js';
+import { InvalidAIResponse, withOneRetry } from './retry.js';
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// maxRetries: 0 turns off the SDK's own silent retries: we retry once ourselves,
+// with a log line, using the rules in retry.ts
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY, maxRetries: 0 });
+
+// How long to wait before the one retry
+const RETRY_DELAY_MS = 2000;
 
 // The model we use, defined once so the saved Review records the same value
 export const MODEL = process.env.GROQ_MODEL ?? 'openai/gpt-oss-120b';
@@ -34,7 +40,16 @@ export async function reviewFiles(files: ChangedFile[]): Promise<Review> {
   // Nothing left to review (e.g. only a lock file changed): don't call the AI
   if (!diffText) return { comments: [], notReviewed };
 
-  // 3. Ask the AI for a review, in JSON only
+  // 3. Ask the AI. Temporary failures (rate limit, 5xx, network, a broken answer) get one retry.
+  const result = await withOneRetry(() => askAI(diffText), {
+    delayMs: RETRY_DELAY_MS,
+    onRetry: (reason) => console.warn(`AI step failed (${reason}), retrying once in ${RETRY_DELAY_MS / 1000}s`),
+  });
+  return { ...result, notReviewed };
+}
+
+// One call to the AI, checked before we trust it
+async function askAI(diffText: string): Promise<z.infer<typeof ReviewSchema>> {
   const completion = await groq.chat.completions.create({
     model: MODEL,
     response_format: { type: 'json_object' },
@@ -56,7 +71,15 @@ export async function reviewFiles(files: ChangedFile[]): Promise<Review> {
     ],
   });
 
-  // 4. Check the answer has the right shape before trusting it
+  // 4. Check the answer has the right shape. A bad answer is an InvalidAIResponse, which is retried.
   const raw = completion.choices[0]?.message?.content ?? '{"comments":[]}';
-  return { ...ReviewSchema.parse(JSON.parse(raw)), notReviewed };
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    throw new InvalidAIResponse('the AI answer was not valid JSON');
+  }
+  const parsed = ReviewSchema.safeParse(json);
+  if (!parsed.success) throw new InvalidAIResponse('the AI answer did not match the expected shape');
+  return parsed.data;
 }

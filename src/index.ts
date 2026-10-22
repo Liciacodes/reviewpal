@@ -6,7 +6,7 @@ import { apiRouter } from './api.js';
 import { authRouter } from './auth/routes.js';
 import { requireCsrf, requireUser } from './auth/session.js';
 import { githubApp } from './github-app.js';
-import { runReview } from './pipeline.js';
+import { runReview, startStuckReviewSweeper } from './pipeline.js';
 
 const app = express();
 
@@ -58,4 +58,6 @@ const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log(`ReviewPal running on port ${PORT}`);
+  // Reviews left "pending" by a restart (or hanging) become "failed", now and every 5 minutes
+  startStuckReviewSweeper();
 });

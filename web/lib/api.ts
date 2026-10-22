@@ -91,3 +91,8 @@ export async function signOut() {
   // eslint-disable-next-line @next/next/no-location-assign-relative-destination
   window.location.assign("/sign-in");
 }
+
+// Review the same commit again. The server replies 202 and the review becomes "pending".
+export function rerunReview(id: string) {
+  return request<{ status: "pending" }>(`/api/reviews/${encodeURIComponent(id)}/rerun`, { method: "POST" });
+}

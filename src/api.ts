@@ -4,6 +4,8 @@ import { canAccessRepo, visibleRepoIds } from './auth/access.js';
 import type { Auth } from './auth/session.js';
 import { prisma } from './db.js';
 import { Prisma } from './generated/prisma/client.js';
+import { githubApp } from './github-app.js';
+import { prepareRerun, processReview } from './pipeline.js';
 
 // Every route here runs after requireUser (see index.ts), so req.auth is always set.
 // Users only ever see reviews of repos they can access; anything else is "not found".
@@ -74,6 +76,32 @@ apiRouter.get('/reviews/:id', async (req, res) => {
   }
   const { repo: { installationId: _installationId, ...repo }, ...rest } = review;
   res.json({ ...rest, repo });
+});
+
+// POST /api/reviews/:id/rerun: review the same commit again (CSRF-checked like every change).
+// Replies 202 right away; the review then shows "pending" until the background run finishes.
+apiRouter.post('/reviews/:id/rerun', async (req, res) => {
+  const review = await prisma.review.findUnique({
+    where: { id: req.params.id },
+    select: {
+      id: true,
+      status: true,
+      headSha: true,
+      prNumber: true,
+      repo: { select: { owner: true, name: true, installationId: true } },
+    },
+  });
+  // Same rule as viewing: 404 for reviews the user can't see
+  if (!review || !canAccessRepo(auth(req).allowed, review.repo)) {
+    return res.status(404).json({ error: 'Review not found' });
+  }
+
+  const result = await prepareRerun(githubApp, review);
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+
+  console.log(`Re-run requested by ${auth(req).user.login} for review ${review.id}`);
+  res.status(202).json({ status: 'pending' });
+  void processReview(githubApp, review.id); // never throws; marks the review done or failed
 });
 
 // PATCH /api/comments/:id/feedback: rate a comment

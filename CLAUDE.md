@@ -3,43 +3,71 @@
 A GitHub App that reviews pull requests with AI. When a PR is opened or updated,
 GitHub sends a webhook; ReviewPal fetches the changed files, asks an LLM (via Groq)
 for review comments, and stores everything in Postgres. A dashboard shows the
-reviews and lets you rate each comment as useful or not.
+reviews and lets you rate each comment as useful or not. ReviewPal also posts the
+review on the pull request itself. Users sign in with GitHub and only see reviews
+for repos where the app is installed and they have access.
 
 ## Stack
 - **API / webhook server**: Express 5 + TypeScript, run with `tsx` (no build step in dev)
-- **GitHub**: `octokit` (GitHub App auth, installation tokens)
-- **AI**: `groq-sdk`, default model `openai/gpt-oss-120b` (override with `GROQ_MODEL`)
+- **GitHub**: `octokit`, one shared `App` in `src/github-app.ts`: installation tokens for
+  webhooks and posting reviews, plus the App's own OAuth (`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET`) for sign-in
+- **AI**: `groq-sdk`, default model `openai/gpt-oss-120b` (override with `GROQ_MODEL`).
+  The SDK's own retries are off (`maxRetries: 0`); we retry once ourselves (`src/retry.ts`)
 - **Validation**: `zod` (AI output and API request bodies)
 - **Database**: Prisma 7 + PostgreSQL on Neon
   - `DATABASE_URL` (pooled) is used by the running app via `@prisma/adapter-pg` (`src/db.ts`)
   - `DIRECT_URL` (direct) is used by the Prisma CLI for migrations (`prisma.config.ts`)
 - **Dashboard**: Next.js (App Router) + Tailwind v4 + lucide-react in `/web`, port 3001.
-  Reads the API at `NEXT_PUBLIC_API_URL` (default `http://localhost:3000`).
-  The API only allows CORS from `DASHBOARD_ORIGIN` (default `http://localhost:3001`).
+  The browser only talks to the dashboard: `web/next.config.ts` rewrites `/api`, `/auth`
+  and `/health` to the API at `API_ORIGIN` (default `http://localhost:3000`). So cookies
+  are first-party and there is no CORS.
+- **Sign-in**: sessions in Postgres (`Session` stores only a SHA-256 of the cookie token),
+  `rp_session` (httpOnly) + `rp_csrf` (readable) cookies, SameSite=Lax, Secure in production.
+  GitHub user tokens are AES-256-GCM encrypted with `TOKEN_ENCRYPTION_KEY`. The allowed-repos
+  list is cached on `User` for 10 minutes. `DASHBOARD_URL` builds the OAuth callback URL.
+- **Tests**: Vitest in both packages (`src/**/*.test.ts`, `web/lib|components/**/*.test.ts`).
+  No database, network or API keys needed.
 
 ## Layout
-- `src/index.ts`: Express app, `/health`, `/webhook` (signature check), mounts `/api`
-- `src/pipeline.ts`: `runReview(payload)`, the webhook -> DB -> AI -> DB flow
-- `src/review.ts`: `reviewFiles()` calls Groq and validates the JSON with zod
-- `src/api.ts`: JSON endpoints for the dashboard
+- `src/index.ts`: Express app, `/health`, `/webhook` (signature check), `/auth`, `/api`
+  (behind `requireUser` + `requireCsrf`); starts the stuck-review sweeper
+- `src/pipeline.ts`: `runReview(payload)` (webhook: creates the pending Review) ->
+  `processReview(id)` (files -> AI -> DB -> post to GitHub; also used by re-runs),
+  `prepareRerun()`, `markStuckReviews()` (pending > 10 min since `startedAt` -> failed)
+- `src/review.ts`: `reviewFiles()` calls Groq, validates the JSON with zod, retries once
+- `src/retry.ts`: which AI errors are retried (429, 5xx, network, bad JSON/shape) and `withOneRetry`
+- `src/stuck.ts`: the stuck-review rule (pure)
+- `src/diff.ts`: numbered diff for the AI, skip rules, fair character budget (pure)
+- `src/review-body.ts`: GitHub review text and inline/body split (pure)
+- `src/github.ts`: `postReviewToGitHub()` (never posts twice: `githubReviewId` check)
+- `src/auth/`: `routes.ts` (`/auth/login`, `/auth/callback`, `POST /auth/logout`), `session.ts`
+  (cookies, `requireUser`, `requireCsrf`), `github-user.ts` (profile, allowed repos, token refresh),
+  `access.ts` (who can see what, pure), `crypto.ts` (encryption, hashing, pure)
+- `src/api.ts`: JSON endpoints for the dashboard, scoped to the signed-in user's repos
+  (404, not 403, for anything they can't see); `POST /api/reviews/:id/rerun`
 - `src/db.ts`: the shared Prisma client
 - `prisma/schema.prisma`: data models; `prisma/migrations/`: SQL history
 - `src/generated/prisma/`: generated client (git-ignored, created by `prisma generate`)
 - `web/`: the dashboard (Next.js 16, App Router)
-  - `web/app/`: pages (`/`, `/reviews`, `/reviews/[id]`, `/settings`) and `loading.tsx` skeletons
-  - `web/components/`: UI pieces; `web/components/review/`: diff view and comment cards
-  - `web/lib/`: API client (`api.ts`), `useApi` hook, diff parser, time helpers
+  - `web/app/(dashboard)/`: the signed-in pages (`/`, `/reviews`, `/reviews/[id]`, `/settings`)
+    with the sidebar layout and `loading.tsx` skeletons; `web/app/sign-in/`: the sign-in page (no sidebar)
+  - `web/proxy.ts`: redirects to `/sign-in` when there is no session cookie (cookie check only)
+  - `web/components/`: UI pieces; `web/components/review/`: diff view, comment cards, re-run controls
+  - `web/lib/`: API client (`api.ts`: CSRF header on changes, 401 -> `/sign-in`), `useApi` hook
+    (`retry()` shows loading, `refresh()` is quiet), diff parser, time helpers
   - Read `web/AGENTS.md` first: this Next.js version differs from older docs
     (Cache Components is on, so `usePathname`/`useParams` need a `<Suspense>` boundary)
 
 ## Commands
 - `npm run dev`: start the server on port 3000 (watch mode)
-- `npm run db:migrate`: create/apply a migration after editing the schema
+- `npm run db:migrate -- --name <what_changed>`: create/apply a migration after editing the schema,
+  then `npm run db:generate` (Prisma 7's `migrate dev` does not regenerate the client)
 - `npm run db:generate`: regenerate the Prisma client
 - `npm run db:studio`: browse the database in the browser
 - `npx tsc --noEmit`: type-check the server
+- `npm test` / `npm run test:watch`: server tests; `npm run test:all`: server + dashboard tests
 - `cd web && npm run dev`: start the dashboard on port 3001
-- `cd web && npm run lint` / `npm run build`: check the dashboard
+- `cd web && npm run lint` / `npm run build` / `npm test`: check the dashboard
 
 ## Rules
 - **ESM**: the project is `"type": "module"`. Local imports must end in `.js`
@@ -47,7 +75,11 @@ reviews and lets you rate each comment as useful or not.
 - `/webhook` must use `express.raw` (the signature is computed over the raw bytes).
   `express.json` is only applied to `/api`.
 - **Never commit secrets**: `.env`, `*.pem` and keys stay out of git. Never print
-  secret values in logs or output.
+  secret values in logs or output. Log `err.message` only, never whole error objects
+  (Octokit/Groq errors carry request details), tokens, OAuth codes or cookies.
+- **Every `/api` route is for signed-in users** and must check access with `canAccessRepo` /
+  `visibleRepoIds` (404 when not allowed). Changes (non-GET) need the CSRF header.
+- Keep logic that can be pure in pure modules, with Vitest tests next to them.
 - The owner is learning: after every change, explain in plain language what
   changed and why, list the files, and give exact steps to run and test it.
 - Work in small phases and stop after each one so it can be tested.

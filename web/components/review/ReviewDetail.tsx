@@ -1,8 +1,8 @@
 "use client";
 
-import { ArrowLeft, CircleCheck, Clock, ExternalLink, FileCode, GitPullRequest, RefreshCw, TriangleAlert } from "lucide-react";
+import { ArrowLeft, CircleCheck, ExternalLink, FileCode, GitPullRequest, LoaderCircle, TriangleAlert } from "lucide-react";
 import Link from "next/link";
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { getReview, setFeedback } from "@/lib/api";
 import type { Feedback, ReviewComment, ReviewDetail as Review } from "@/lib/types";
 import { useApi } from "@/lib/use-api";
@@ -12,10 +12,14 @@ import { RelativeTime } from "../RelativeTime";
 import { EmptyState, ErrorState, LoadingRegion, Skeleton } from "../states";
 import { CommentCard } from "./CommentCard";
 import { FileDiff, type FeedbackFor } from "./FileDiff";
+import { MoreMenu, RerunButton } from "./RerunControls";
+
+// While a review is pending, fetch it again this often (quietly, keeping the page on screen)
+const PENDING_REFRESH_MS = 4000;
 
 export function ReviewDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data, error, loading, retry } = useApi(`review:${id}`, (signal) => getReview(id, signal));
+  const { data, error, loading, retry, refresh } = useApi(`review:${id}`, (signal) => getReview(id, signal));
 
   if (error?.status === 404) {
     return (
@@ -37,7 +41,7 @@ export function ReviewDetail({ params }: { params: Promise<{ id: string }> }) {
   }
   if (loading || !data) return <ReviewDetailSkeleton />;
 
-  return <ReviewView review={data} onRefresh={retry} />;
+  return <ReviewView review={data} refresh={refresh} />;
 }
 
 function BackLink() {
@@ -59,7 +63,15 @@ function without<T>(obj: Record<string, T>, key: string): Record<string, T> {
   return copy;
 }
 
-function ReviewView({ review, onRefresh }: { review: Review; onRefresh: () => void }) {
+function ReviewView({ review, refresh }: { review: Review; refresh: () => void }) {
+  // Auto-refresh while the AI is working; stops by itself once the review is done or failed
+  const pending = review.status === "pending";
+  useEffect(() => {
+    if (!pending) return;
+    const timer = setInterval(refresh, PENDING_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [pending, refresh]);
+
   // Optimistic feedback: show the click immediately, undo it if the server says no
   const [optimistic, setOptimistic] = useState<Record<string, Feedback>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -97,16 +109,19 @@ function ReviewView({ review, onRefresh }: { review: Review; onRefresh: () => vo
         </p>
         <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <h1 className="font-mono text-lg font-semibold leading-snug tracking-tight text-balance text-fg sm:text-xl">{review.prTitle}</h1>
-          <a
-            href={review.prUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex shrink-0 items-center gap-2 self-start rounded-md border border-line bg-surface px-3 py-1.5 text-sm text-fg transition-colors duration-150 hover:border-muted"
-          >
-            View on GitHub
-            <ExternalLink aria-hidden className="size-4 text-muted" />
-            <span className="sr-only">(opens in a new tab)</span>
-          </a>
+          <div className="flex shrink-0 items-center gap-2 self-start">
+            <a
+              href={review.prUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-md border border-line bg-surface px-3 py-1.5 text-sm text-fg transition-colors duration-150 hover:border-muted"
+            >
+              View on GitHub
+              <ExternalLink aria-hidden className="size-4 text-muted" />
+              <span className="sr-only">(opens in a new tab)</span>
+            </a>
+            {review.status === "done" && <MoreMenu reviewId={review.id} onStarted={refresh} />}
+          </div>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
           <StatusBadge status={review.status} />
@@ -152,22 +167,15 @@ function ReviewView({ review, onRefresh }: { review: Review; onRefresh: () => vo
           <div className="min-w-0">
             <p className="font-mono text-sm text-fg">This review failed</p>
             <p className="mt-1 text-sm text-muted [overflow-wrap:anywhere]">{review.errorMessage ?? "No error message was saved."}</p>
+            <RerunButton reviewId={review.id} onStarted={refresh} />
           </div>
         </div>
       )}
 
-      {review.status === "pending" && (
-        <div className="mb-8 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-surface p-4">
-          <Clock aria-hidden className="size-4 text-muted" />
-          <p className="flex-1 text-sm text-muted">The AI is still reviewing this pull request.</p>
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="inline-flex items-center gap-2 rounded-md border border-line px-3 py-1.5 text-sm text-fg transition-colors duration-150 hover:border-muted"
-          >
-            <RefreshCw aria-hidden className="size-4" />
-            Refresh
-          </button>
+      {pending && (
+        <div role="status" className="mb-8 flex items-center gap-3 rounded-lg border border-line bg-surface p-4">
+          <LoaderCircle aria-hidden className="size-4 shrink-0 animate-spin text-muted motion-reduce:animate-none" />
+          <p className="text-sm text-muted">The AI is reviewing this pull request. This page updates by itself.</p>
         </div>
       )}
 
