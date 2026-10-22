@@ -4,3 +4,9 @@ dist
 *.pem
 src/generated/
 .playwright-mcp/
+
+# AI coding tool folders (kept on disk, not part of the project). CLAUDE.md in the root IS tracked.
+.claude/
+.agents/
+.windsurf/
+skills-lock.json
