@@ -9,9 +9,9 @@ and lets you rate each comment as useful or not.
 **Live dashboard:** https://reviewpal.vercel.app. Click **View demo** to explore a sample repository without signing in (read-only).<br>
 **Example review on GitHub:** [reviewpal-playground#6](https://github.com/Liciacodes/reviewpal-playground/pull/6)
 
-<!-- TODO: record a short demo GIF, save it as docs/demo.gif, then replace this comment with:
-![ReviewPal demo](docs/demo.gif)
--->
+## Demo
+
+https://github.com/user-attachments/assets/54d3807c-71ec-4858-a1b5-19d7cbe815d4
 
 ## Screenshots
 
