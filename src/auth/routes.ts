@@ -5,8 +5,9 @@ import { prisma } from '../db.js';
 import { githubApp } from '../github-app.js';
 import { safeNext } from './access.js';
 import { randomToken, safeEqual } from './crypto.js';
+import { DEMO_COOKIE, DEMO_TTL_MS, parseDemoRepo } from './demo.js';
 import { encryptTokens, fetchAllowedRepos, fetchProfile } from './github-user.js';
-import { clearSessionCookies, cookieOptions, createSession, findSession } from './session.js';
+import { clearDemoCookie, clearSessionCookies, cookieOptions, createSession, findSession } from './session.js';
 
 export const authRouter = express.Router();
 
@@ -58,6 +59,7 @@ authRouter.get('/callback', async (req, res) => {
 
     const user = await prisma.user.upsert({ where: { githubId: profile.githubId }, update: data, create: data });
     await createSession(res, user.id);
+    clearDemoCookie(res); // signed in for real now
     console.log(`Signed in: ${user.login}`);
     res.redirect(safeNext(saved.next));
   } catch (err) {
@@ -78,9 +80,23 @@ authRouter.post('/logout', async (req, res) => {
       await prisma.session.delete({ where: { id: session.id } });
     }
     clearSessionCookies(res);
+    clearDemoCookie(res);
     res.status(204).end();
   } catch (err) {
     console.error(`Sign-out failed: ${(err as Error).message}`);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// Demo: explore DEMO_REPO read-only, without signing in. Only sets a cookie; see demo.ts.
+authRouter.get('/demo', (req, res) => {
+  if (!parseDemoRepo(process.env.DEMO_REPO)) return backToSignIn(res, "The demo isn't available right now.");
+  res.cookie(DEMO_COOKIE, '1', cookieOptions(DEMO_TTL_MS));
+  res.redirect('/');
+});
+
+// Leave the demo (e.g. to sign in for real)
+authRouter.get('/exit-demo', (req, res) => {
+  clearDemoCookie(res);
+  res.redirect('/sign-in');
 });

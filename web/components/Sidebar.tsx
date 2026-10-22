@@ -1,6 +1,6 @@
 "use client";
 
-import { GitPullRequest, LayoutDashboard, LogOut, Menu, ScanSearch, Settings, X } from "lucide-react";
+import { GitPullRequest, LayoutDashboard, LogIn, LogOut, Menu, ScanSearch, Settings, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -91,6 +91,23 @@ function UserMenu() {
       <div className="flex items-center gap-2.5 px-3 py-2" aria-hidden>
         <Skeleton className="size-6 rounded-full" />
         <Skeleton className="h-3.5 w-24" />
+      </div>
+    );
+  }
+
+  // Demo visitor: no account to sign out of, so offer signing in instead
+  if (me.demo) {
+    return (
+      <div className="px-3">
+        <p className="text-sm text-fg">Demo visitor</p>
+        <p className="font-mono text-xs text-muted">read-only</p>
+        <a
+          href="/auth/exit-demo"
+          className="mt-3 inline-flex items-center gap-2 rounded-md text-sm text-accent transition-colors duration-150 hover:text-amber-300"
+        >
+          <LogIn aria-hidden className="size-4" />
+          Sign in
+        </a>
       </div>
     );
   }

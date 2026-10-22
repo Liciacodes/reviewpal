@@ -56,11 +56,12 @@ export type ReviewDetail = {
   comments: ReviewComment[];
 };
 
-// The signed-in user (GET /api/me)
+// The signed-in user, or the read-only demo visitor (GET /api/me)
 export type Me = {
   login: string;
   name: string | null;
   avatarUrl: string | null;
+  demo: boolean; // true: read-only demo of DEMO_REPO (no rating, no re-run)
 };
 
 export type Stats = {

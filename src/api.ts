@@ -1,14 +1,17 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { canAccessRepo, visibleRepoIds } from './auth/access.js';
+import { DEMO_PROFILE } from './auth/demo.js';
 import type { Auth } from './auth/session.js';
 import { prisma } from './db.js';
 import { Prisma } from './generated/prisma/client.js';
 import { githubApp } from './github-app.js';
 import { prepareRerun, processReview } from './pipeline.js';
 
-// Every route here runs after requireUser (see index.ts), so req.auth is always set.
-// Users only ever see reviews of repos they can access; anything else is "not found".
+// Every route here runs after requireUser (see index.ts), so req.auth is always set: a signed-in
+// user, or a demo visitor whose only allowed repo is DEMO_REPO. Either way they only ever see
+// reviews of repos they can access; anything else is "not found".
+// Demo visitors never reach a write route: rejectDemoWrites answers 403 first.
 export const apiRouter = express.Router();
 
 function auth(req: Request): Auth {
@@ -22,10 +25,12 @@ async function myRepoIds(req: Request): Promise<string[]> {
   return visibleRepoIds(repos, auth(req).allowed);
 }
 
-// GET /api/me: who is signed in (for the sidebar)
+// GET /api/me: who is signed in (for the sidebar), or the demo visitor (no personal data)
 apiRouter.get('/me', (req, res) => {
-  const { login, name, avatarUrl } = auth(req).user;
-  res.json({ login, name, avatarUrl });
+  const a = auth(req);
+  if (a.kind === 'demo') return res.json(DEMO_PROFILE);
+  const { login, name, avatarUrl } = a.user;
+  res.json({ login, name, avatarUrl, demo: false });
 });
 
 // GET /api/reviews: the 50 newest reviews the user can see, with comment counts
@@ -99,7 +104,8 @@ apiRouter.post('/reviews/:id/rerun', async (req, res) => {
   const result = await prepareRerun(githubApp, review);
   if (!result.ok) return res.status(result.status).json({ error: result.error });
 
-  console.log(`Re-run requested by ${auth(req).user.login} for review ${review.id}`);
+  const a = auth(req);
+  console.log(`Re-run requested by ${a.kind === 'user' ? a.user.login : 'demo'} for review ${review.id}`);
   res.status(202).json({ status: 'pending' });
   void processReview(githubApp, review.id); // never throws; marks the review done or failed
 });

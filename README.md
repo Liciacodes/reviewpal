@@ -6,7 +6,7 @@ When a pull request is opened or updated, ReviewPal reads the diff, asks an LLM 
 comments, and posts them on the pull request as inline comments. A dashboard shows every review
 and lets you rate each comment as useful or not.
 
-**Live dashboard:** https://reviewpal.vercel.app (currently installed on my own repositories only; a public demo mode is coming).<br>
+**Live dashboard:** https://reviewpal.vercel.app. Click **View demo** to explore a sample repository without signing in (read-only).<br>
 **Example review on GitHub:** [reviewpal-playground#6](https://github.com/Liciacodes/reviewpal-playground/pull/6)
 
 <!-- TODO: record a short demo GIF, save it as docs/demo.gif, then replace this comment with:
@@ -73,6 +73,8 @@ flowchart LR
 - **GitHub sign-in with per-user access:** users only see reviews for repositories where the app is
   installed and they have access. Everything else returns 404.
 - **Usefulness ratings:** each comment can be rated useful or not useful. The overview shows the share of useful comments.
+- **Read-only demo:** visitors can explore one sample repository without signing in. The demo can't see
+  any other repository, and the server refuses every write from a demo visitor (a test checks every write route).
 
 ## Tech stack
 
@@ -139,6 +141,7 @@ Environment variables (names only; see `.env.example`):
 | `TOKEN_ENCRYPTION_KEY` | 32 random bytes (base64), for encrypting GitHub user tokens |
 | `GROQ_API_KEY`, `GROQ_MODEL` (optional) | The LLM |
 | `DASHBOARD_URL` | Dashboard address, used for the sign-in callback |
+| `DEMO_REPO` (optional) | The public repo shown in the read-only demo, e.g. `Liciacodes/reviewpal-playground` |
 | `API_ORIGIN` (dashboard, optional) | Where the dashboard forwards API calls (default `http://localhost:3000`) |
 
 If anything required is missing, the server refuses to start and lists the missing names.
@@ -155,14 +158,13 @@ The tests cover the logic that is easy to get wrong:
 - diff parsing and line numbering, skipped files and the size budget
 - splitting comments between inline and the review text
 - retry decisions and the stuck-review rule
-- access control and session crypto
+- access control, the read-only demo and session crypto
 - startup config checks and webhook redelivery
 
 They don't need a database, network access or API keys.
 
 ## What's next
 
-- **Demo mode:** a read-only sample workspace, so visitors can explore the dashboard without installing the app.
 - **Public install with usage limits:** let anyone install ReviewPal, with per-installation limits on AI usage.
 - **Learning from ratings:** use the useful / not useful ratings to tune the prompt and drop the kinds of comments people don't find helpful.
 - **Background job queue:** move reviews out of the web process into a queue with retries, so restarts and slow reviews don't affect each other.

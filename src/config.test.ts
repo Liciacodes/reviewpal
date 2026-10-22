@@ -53,6 +53,13 @@ describe('configProblems', () => {
     ]);
   });
 
+  it('accepts DEMO_REPO as owner/name, or unset', () => {
+    expect(configProblems({ ...good, DEMO_REPO: 'Liciacodes/reviewpal-playground' }, exists)).toEqual([]);
+    expect(configProblems({ ...good, DEMO_REPO: 'https://github.com/Liciacodes/reviewpal-playground' }, exists)).toEqual([
+      'DEMO_REPO must look like owner/name (e.g. Liciacodes/reviewpal-playground), or be left unset',
+    ]);
+  });
+
   it('needs an https DASHBOARD_URL in production only', () => {
     expect(configProblems(good, exists)).toEqual([]); // local: optional
     expect(configProblems({ ...good, NODE_ENV: 'production' }, exists)).toEqual([

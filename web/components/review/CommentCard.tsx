@@ -8,18 +8,20 @@ export type FeedbackProps = {
   feedback: Feedback | null; // what to show (may be the optimistic value)
   error?: string;            // set when saving failed and we rolled back
   onFeedback: (value: Feedback) => void;
+  readOnly?: boolean;        // demo: buttons shown but disabled
 };
 
 function FeedbackButton({
-  pressed, onClick, icon: Icon, label, pressedClass,
-}: { pressed: boolean; onClick: () => void; icon: LucideIcon; label: string; pressedClass: string }) {
+  pressed, onClick, icon: Icon, label, pressedClass, disabled = false,
+}: { pressed: boolean; onClick: () => void; icon: LucideIcon; label: string; pressedClass: string; disabled?: boolean }) {
   return (
     <button
       type="button"
       aria-pressed={pressed}
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors duration-150 ${
-        pressed ? pressedClass : "border-line text-muted hover:border-muted hover:text-fg"
+      disabled={disabled}
+      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${
+        pressed ? pressedClass : "border-line text-muted enabled:hover:border-muted enabled:hover:text-fg"
       }`}
     >
       <Icon aria-hidden className="size-3.5" />
@@ -42,7 +44,7 @@ function InlineCode({ text }: { text: string }) {
 }
 
 // An AI comment, attached under the line it talks about
-export function CommentCard({ comment, feedback, error, onFeedback }: { comment: ReviewComment } & FeedbackProps) {
+export function CommentCard({ comment, feedback, error, onFeedback, readOnly = false }: { comment: ReviewComment } & FeedbackProps) {
   const s = SEVERITY[comment.severity];
 
   return (
@@ -60,13 +62,14 @@ export function CommentCard({ comment, feedback, error, onFeedback }: { comment:
       </p>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <span className="mr-1 text-xs text-muted">Was this helpful?</span>
+        <span className="mr-1 text-xs text-muted">{readOnly ? "Sign in to rate comments" : "Was this helpful?"}</span>
         <FeedbackButton
           pressed={feedback === "useful"}
           onClick={() => onFeedback("useful")}
           icon={ThumbsUp}
           label="Useful"
           pressedClass="border-emerald-400/50 bg-emerald-400/10 text-emerald-300"
+          disabled={readOnly}
         />
         <FeedbackButton
           pressed={feedback === "not_useful"}
@@ -74,6 +77,7 @@ export function CommentCard({ comment, feedback, error, onFeedback }: { comment:
           icon={ThumbsDown}
           label="Not useful"
           pressedClass="border-stone-400/50 bg-stone-400/10 text-fg"
+          disabled={readOnly}
         />
         <span role="status" className="text-xs text-red-400">{error}</span>
       </div>

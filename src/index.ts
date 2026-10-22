@@ -5,7 +5,7 @@ import express from 'express';
 import crypto from 'node:crypto';
 import { apiRouter } from './api.js';
 import { authRouter } from './auth/routes.js';
-import { requireCsrf, requireUser } from './auth/session.js';
+import { apiGuards, requireUser } from './auth/session.js';
 import { githubApp } from './github-app.js';
 import { redeliverMissedWebhooks } from './missed-webhooks.js';
 import { runReview, startStuckReviewSweeper } from './pipeline.js';
@@ -51,9 +51,9 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 //    so the browser only ever talks to the dashboard's domain and no CORS is needed.
 app.use('/auth', cookieParser(), authRouter);
 
-// 8. JSON API for the dashboard: signed-in users only, and changes need the CSRF token.
-//    express.json is only used here, never on /webhook.
-app.use('/api', cookieParser(), express.json(), requireUser, requireCsrf, apiRouter);
+// 8. JSON API for the dashboard: signed-in users (or read-only demo visitors), and changes need
+//    the CSRF token. express.json is only used here, never on /webhook.
+app.use('/api', cookieParser(), express.json(), requireUser, ...apiGuards, apiRouter);
 
 const PORT = process.env.PORT || 3000;
 

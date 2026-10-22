@@ -46,6 +46,7 @@ Work through the steps in order. Wherever you see `<api>` or `<dashboard>`, use 
 | `DASHBOARD_URL` | ✅ | | `https://<dashboard>.vercel.app` (no trailing slash) |
 | `GROQ_API_KEY` | ✅ | | from console.groq.com |
 | `GROQ_MODEL` | optional | | leave unset for `openai/gpt-oss-120b` |
+| `DEMO_REPO` | optional | | `Liciacodes/reviewpal-playground`: the public repo shown in the read-only demo (leave unset to turn the demo off) |
 | `API_ORIGIN` | | ✅ | `https://<api>.onrender.com` (no trailing slash) |
 
 - Render sets `PORT` by itself.
@@ -162,6 +163,11 @@ This covers deploys and any missed ping.
 
 ## 5. Test it end to end
 
+- [ ] **Demo:** in a private window, open `https://<dashboard>.vercel.app` and click **View demo**. If Render
+  was asleep, you'll see "Waking up the server…" for up to a minute. Then you land on the Overview with the banner
+  "You're viewing a demo". Only `DEMO_REPO` reviews are listed, the rating buttons are greyed out, there is
+  no ⋯ menu, and the sidebar says "Demo visitor". **Sign in** in the banner takes you back to the sign-in page.
+
 - [ ] **Sign-in:** open `https://<dashboard>.vercel.app`, then **Sign in with GitHub**, then authorize. You land on the
   Overview, with your avatar in the sidebar. Production uses a new encryption key, so this is a fresh sign-in.
 - [ ] **Your data:** your playground reviews are listed (if you kept the same database), and stats show.
@@ -192,6 +198,8 @@ This covers deploys and any missed ping.
 | Dashboard shows "Can't reach the API", or `/health` on Vercel fails | `API_ORIGIN` is wrong or was set after the build (redeploy on Vercel), or Render is waking up (try again in a minute) |
 | Recent Deliveries show timeouts | The keep-alive isn't running. The safety net catches them on the next restart. |
 | Everyone was signed out after a deploy | `TOKEN_ENCRYPTION_KEY` changed. Expected; just sign in again |
+| **View demo** shows "The demo isn't available right now." | `DEMO_REPO` isn't set on Render (or the service wasn't restarted after setting it) |
+| Demo shows no reviews | `DEMO_REPO` has a typo, or that repo has no reviews in this database yet |
 
 ## Updating later
 

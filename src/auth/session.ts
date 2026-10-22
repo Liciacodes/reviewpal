@@ -3,6 +3,7 @@ import type { CookieOptions, NextFunction, Request, Response } from 'express';
 import { prisma } from '../db.js';
 import type { AllowedRepo } from './access.js';
 import { randomToken, safeEqual, sha256 } from './crypto.js';
+import { DEMO_COOKIE, demoAllowedRepos, parseDemoRepo, rejectDemoWrites } from './demo.js';
 import { GitHubAccessRevoked, getAllowedRepos } from './github-user.js';
 
 export const SESSION_COOKIE = 'rp_session';
@@ -16,12 +17,15 @@ export function cookieOptions(maxAge: number, httpOnly = true): CookieOptions {
   return { httpOnly, secure, sameSite: 'lax', path: '/', maxAge };
 }
 
-// What requireUser attaches to the request
-export type Auth = {
-  user: { id: string; login: string; name: string | null; avatarUrl: string | null };
-  session: { id: string; csrfToken: string };
-  allowed: AllowedRepo[];
-};
+// What requireUser attaches to the request: a signed-in user, or a read-only demo visitor
+export type Auth =
+  | {
+      kind: 'user';
+      user: { id: string; login: string; name: string | null; avatarUrl: string | null };
+      session: { id: string; csrfToken: string };
+      allowed: AllowedRepo[];
+    }
+  | { kind: 'demo'; allowed: AllowedRepo[] };
 
 declare global {
   namespace Express {
@@ -47,6 +51,11 @@ export function clearSessionCookies(res: Response): void {
   res.clearCookie(CSRF_COOKIE, { ...options, httpOnly: false });
 }
 
+export function clearDemoCookie(res: Response): void {
+  const { maxAge: _maxAge, ...options } = cookieOptions(0);
+  res.clearCookie(DEMO_COOKIE, options);
+}
+
 // The session for this request's cookie, or null (missing, unknown or expired)
 export async function findSession(req: Request) {
   const token: unknown = req.cookies?.[SESSION_COOKIE];
@@ -68,6 +77,18 @@ function notSignedIn(res: Response) {
 // Lets the request through only with a valid session, and attaches the user and the repos they may see
 export async function requireUser(req: Request, res: Response, next: NextFunction) {
   try {
+    // No session cookie but a demo cookie: a read-only visitor who can only see DEMO_REPO
+    if (!req.cookies?.[SESSION_COOKIE] && req.cookies?.[DEMO_COOKIE]) {
+      const demoRepo = parseDemoRepo(process.env.DEMO_REPO);
+      if (!demoRepo) {
+        clearDemoCookie(res);
+        return res.status(401).json({ error: 'The demo is not available' });
+      }
+      const repos = await prisma.repo.findMany({ select: { owner: true, name: true, installationId: true } });
+      req.auth = { kind: 'demo', allowed: demoAllowedRepos(repos, demoRepo) };
+      return next();
+    }
+
     const session = await findSession(req);
     if (!session) return notSignedIn(res);
 
@@ -84,7 +105,7 @@ export async function requireUser(req: Request, res: Response, next: NextFunctio
     }
 
     const { id, login, name, avatarUrl } = session.user;
-    req.auth = { user: { id, login, name, avatarUrl }, session: { id: session.id, csrfToken: session.csrfToken }, allowed };
+    req.auth = { kind: 'user', user: { id, login, name, avatarUrl }, session: { id: session.id, csrfToken: session.csrfToken }, allowed };
     next();
   } catch (err) {
     console.error(`Session check failed: ${(err as Error).message}`);
@@ -99,8 +120,13 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 export function requireCsrf(req: Request, res: Response, next: NextFunction) {
   if (SAFE_METHODS.has(req.method)) return next();
   const sent = req.header('x-csrf-token') ?? '';
-  if (!req.auth || !safeEqual(sent, req.auth.session.csrfToken)) {
+  // Demo visitors have no session (and are already stopped by rejectDemoWrites)
+  if (req.auth?.kind !== 'user' || !safeEqual(sent, req.auth.session.csrfToken)) {
     return res.status(403).json({ error: 'Invalid or missing CSRF token' });
   }
   next();
 }
+
+// Run after requireUser on every /api route (index.ts, and the demo test uses this same list):
+// demo visitors may only read, and signed-in users need the CSRF token for changes.
+export const apiGuards = [rejectDemoWrites, requireCsrf];

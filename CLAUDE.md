@@ -29,6 +29,9 @@ for repos where the app is installed and they have access.
   `rp_session` (httpOnly) + `rp_csrf` (readable) cookies, SameSite=Lax, Secure in production.
   GitHub user tokens are AES-256-GCM encrypted with `TOKEN_ENCRYPTION_KEY`. The allowed-repos
   list is cached on `User` for 10 minutes. `DASHBOARD_URL` builds the OAuth callback URL.
+- **Demo**: `/auth/demo` sets an `rp_demo` cookie (not secret). With no session, `requireUser` treats it as a
+  read-only visitor whose only allowed repo is `DEMO_REPO` (unset = demo off). `rejectDemoWrites` (in `apiGuards`)
+  answers 403 to every non-GET from a demo visitor; `src/api-demo.test.ts` checks every write route automatically.
 - **Tests**: Vitest in both packages (`src/**/*.test.ts`, `web/lib|components/**/*.test.ts`).
   No database, network or API keys needed.
 
@@ -53,7 +56,7 @@ for repos where the app is installed and they have access.
 - `src/github.ts`: `postReviewToGitHub()` (never posts twice: `githubReviewId` check)
 - `src/auth/`: `routes.ts` (`/auth/login`, `/auth/callback`, `POST /auth/logout`), `session.ts`
   (cookies, `requireUser`, `requireCsrf`), `github-user.ts` (profile, allowed repos, token refresh),
-  `access.ts` (who can see what, pure), `crypto.ts` (encryption, hashing, pure)
+  `access.ts` (who can see what, pure), `crypto.ts` (encryption, hashing, pure), `demo.ts` (demo rules)
 - `src/api.ts`: JSON endpoints for the dashboard, scoped to the signed-in user's repos
   (404, not 403, for anything they can't see); `POST /api/reviews/:id/rerun`
 - `src/db.ts`: the shared Prisma client
@@ -62,7 +65,7 @@ for repos where the app is installed and they have access.
 - `web/`: the dashboard (Next.js 16, App Router)
   - `web/app/(dashboard)/`: the signed-in pages (`/`, `/reviews`, `/reviews/[id]`, `/settings`)
     with the sidebar layout and `loading.tsx` skeletons; `web/app/sign-in/`: the sign-in page (no sidebar)
-  - `web/proxy.ts`: redirects to `/sign-in` when there is no session cookie (cookie check only)
+  - `web/proxy.ts`: redirects to `/sign-in` when there is no session or demo cookie (cookie check only)
   - `web/components/`: UI pieces; `web/components/review/`: diff view, comment cards, re-run controls
   - `web/lib/`: API client (`api.ts`: CSRF header on changes, 401 -> `/sign-in`), `useApi` hook
     (`retry()` shows loading, `refresh()` is quiet), diff parser, time helpers
@@ -90,8 +93,10 @@ for repos where the app is installed and they have access.
 - **Never commit secrets**: `.env`, `*.pem` and keys stay out of git. Never print
   secret values in logs or output. Log `err.message` only, never whole error objects
   (Octokit/Groq errors carry request details), tokens, OAuth codes or cookies.
-- **Every `/api` route is for signed-in users** and must check access with `canAccessRepo` /
-  `visibleRepoIds` (404 when not allowed). Changes (non-GET) need the CSRF header.
+- **Every `/api` route is for signed-in users or demo visitors** and must check access with `canAccessRepo` /
+  `visibleRepoIds` (404 when not allowed). Changes (non-GET) need the CSRF header and are refused for demo visitors
+  by `apiGuards`. A new write route needs no extra demo code, but keep it non-GET.
+- In the dashboard, anything that changes data must be hidden or disabled when `me.demo` is true.
 - Keep logic that can be pure in pure modules, with Vitest tests next to them.
 - **New env var?** Add it to `REQUIRED` in `src/config.ts` (if the server needs it), to `.env`,
   and to the table in `DEPLOY.md` (Render or Vercel). Dashboard env vars used in `next.config.ts`

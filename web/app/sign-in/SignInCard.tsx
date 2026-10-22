@@ -1,7 +1,8 @@
 "use client";
 
-import { LogIn, TriangleAlert } from "lucide-react";
+import { Eye, LoaderCircle, LogIn, TriangleAlert } from "lucide-react";
 import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Logo } from "@/components/Sidebar";
 
 // The only messages the server sends (src/auth/routes.ts). Anything else in ?error is shown
@@ -11,7 +12,11 @@ const KNOWN_ERRORS = new Set([
   "Sign-in was cancelled.",
   "Sign-in expired. Please try again.",
   "Could not sign in with GitHub. Please try again.",
+  "The demo isn't available right now.",
 ]);
+
+// After this long without leaving the page, the API is probably waking up (Render free plan)
+const WAKING_AFTER_MS = 3000;
 
 export function SignInFromUrl() {
   const params = useSearchParams();
@@ -25,6 +30,34 @@ export function SignInFromUrl() {
 }
 
 export function SignInCard({ next, error }: { next: string; error: string | null }) {
+  const [leaving, setLeaving] = useState<"github" | "demo" | null>(null);
+  const [waking, setWaking] = useState(false);
+
+  // Start waking the API now, so it's likely awake by the time a button is clicked.
+  // /health is public and cheap; the answer doesn't matter.
+  useEffect(() => {
+    fetch("/health", { cache: "no-store" }).catch(() => {});
+  }, []);
+
+  // Coming back with the Back button can restore this page frozen as it was: reset it
+  useEffect(() => {
+    const reset = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        setLeaving(null);
+        setWaking(false);
+      }
+    };
+    window.addEventListener("pageshow", reset);
+    return () => window.removeEventListener("pageshow", reset);
+  }, []);
+
+  // A button was clicked: if we're still here after a few seconds, explain the wait
+  useEffect(() => {
+    if (!leaving) return;
+    const timer = setTimeout(() => setWaking(true), WAKING_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [leaving]);
+
   return (
     <div className="w-full max-w-sm">
       <Logo />
@@ -38,18 +71,39 @@ export function SignInCard({ next, error }: { next: string; error: string | null
         </div>
       )}
 
-      {/* A plain link, not fetch: the browser must actually go to GitHub and back.
+      {/* Plain links, not fetch: the browser must actually go to GitHub (or into the demo).
           The server checks `next` too (safeNext), so it can't send you to another site. */}
-      <a
-        href={`/auth/login?next=${encodeURIComponent(next)}`}
-        className="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-canvas transition-colors duration-150 hover:bg-amber-300"
-      >
-        <LogIn aria-hidden className="size-4" />
-        Sign in with GitHub
-      </a>
+      <div className="mt-8 flex flex-wrap gap-3">
+        <a
+          href={`/auth/login?next=${encodeURIComponent(next)}`}
+          onClick={() => setLeaving("github")}
+          className="inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-canvas transition-colors duration-150 hover:bg-amber-300"
+        >
+          <LogIn aria-hidden className="size-4" />
+          {leaving === "github" ? "Opening GitHub…" : "Sign in with GitHub"}
+        </a>
+        <a
+          href="/auth/demo"
+          onClick={() => setLeaving("demo")}
+          className="inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-line bg-surface px-4 py-2.5 text-sm text-fg transition-colors duration-150 hover:border-muted"
+        >
+          <Eye aria-hidden className="size-4 text-muted" />
+          {leaving === "demo" ? "Opening demo…" : "View demo"}
+        </a>
+      </div>
+
+      {waking && (
+        <p role="status" className="mt-4 flex items-start gap-2 text-sm text-muted">
+          <LoaderCircle aria-hidden className="mt-0.5 size-4 shrink-0 animate-spin text-accent motion-reduce:animate-none" />
+          <span>
+            Waking up the server… This can take up to a minute on the free plan.
+          </span>
+        </p>
+      )}
 
       <p className="mt-4 text-xs text-muted">
-        You&apos;ll only see repositories where ReviewPal is installed and you have access.
+        You&apos;ll only see repositories where ReviewPal is installed and you have access. The demo shows a sample
+        repository, read-only.
       </p>
     </div>
   );

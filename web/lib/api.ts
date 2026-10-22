@@ -24,10 +24,30 @@ export function goToSignIn() {
   window.location.assign(`/sign-in?next=${encodeURIComponent(next)}`);
 }
 
+// "Slow request" signal: on Render's free plan the API sleeps and takes up to a minute to wake.
+// Any request still waiting after SLOW_AFTER_MS counts as slow; ServerWakeNotice listens.
+const SLOW_AFTER_MS = 4000;
+let slowRequests = 0;
+const slowListeners = new Set<(slow: boolean) => void>();
+function setSlow(change: 1 | -1) {
+  slowRequests += change;
+  for (const listener of slowListeners) listener(slowRequests > 0);
+}
+export function onSlowRequests(listener: (slow: boolean) => void): () => void {
+  slowListeners.add(listener);
+  return () => slowListeners.delete(listener);
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
   const headers = new Headers(init.headers);
   if (method !== "GET") headers.set("X-CSRF-Token", csrfToken());
+
+  let markedSlow = false;
+  const slowTimer = setTimeout(() => {
+    markedSlow = true;
+    setSlow(1);
+  }, SLOW_AFTER_MS);
 
   let res: Response;
   try {
@@ -36,6 +56,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (init.signal?.aborted) throw err;
     // fetch only throws when the server can't be reached at all
     throw new ApiError("Can't reach the dashboard server. Check your connection.", 0);
+  } finally {
+    clearTimeout(slowTimer);
+    if (markedSlow) setSlow(-1);
   }
 
   if (res.status === 401) {
@@ -51,8 +74,15 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return res.status === 204 ? (undefined as T) : res.json();
 }
 
-export function getMe(signal?: AbortSignal) {
-  return request<Me>("/api/me", { signal });
+// Who is signed in (or the demo visitor). Asked once per page load and shared: the sidebar,
+// the demo banner and the review page all need it. Sign-in/out always reload the page.
+let mePromise: Promise<Me> | undefined;
+export function getMe(): Promise<Me> {
+  mePromise ??= request<Me>("/api/me").catch((err) => {
+    mePromise = undefined; // try again next time
+    throw err;
+  });
+  return mePromise;
 }
 
 export function getReviews(signal?: AbortSignal) {

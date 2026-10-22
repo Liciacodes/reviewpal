@@ -35,6 +35,11 @@ export function configProblems(env: Env, fileExists: (path: string) => boolean):
     problems.push('TOKEN_ENCRYPTION_KEY must be 32 random bytes in base64');
   }
 
+  // Optional: the public repo shown in the read-only demo
+  if (isSet(env.DEMO_REPO) && !/^[\w.-]+\/[\w.-]+$/.test(env.DEMO_REPO!.trim())) {
+    problems.push('DEMO_REPO must look like owner/name (e.g. Liciacodes/reviewpal-playground), or be left unset');
+  }
+
   // In production the sign-in callback must point at the real dashboard, over HTTPS
   if (env.NODE_ENV === 'production') {
     if (!isSet(env.DASHBOARD_URL)) problems.push('DASHBOARD_URL is missing (the dashboard address, e.g. https://reviewpal.vercel.app)');

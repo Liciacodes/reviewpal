@@ -3,7 +3,7 @@
 import { ArrowLeft, CircleCheck, ExternalLink, FileCode, GitPullRequest, LoaderCircle, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
-import { getReview, setFeedback } from "@/lib/api";
+import { getMe, getReview, setFeedback } from "@/lib/api";
 import type { Feedback, ReviewComment, ReviewDetail as Review } from "@/lib/types";
 import { useApi } from "@/lib/use-api";
 import { SeverityCounts, StatusBadge } from "../badges";
@@ -64,6 +64,10 @@ function without<T>(obj: Record<string, T>, key: string): Record<string, T> {
 }
 
 function ReviewView({ review, refresh }: { review: Review; refresh: () => void }) {
+  // Demo visitors only look: no rating, no re-run. Until we know, stay read-only (no flash of buttons).
+  const { data: me } = useApi("me", getMe);
+  const readOnly = me?.demo ?? true;
+
   // Auto-refresh while the AI is working; stops by itself once the review is done or failed
   const pending = review.status === "pending";
   useEffect(() => {
@@ -79,6 +83,7 @@ function ReviewView({ review, refresh }: { review: Review; refresh: () => void }
   const feedbackFor: FeedbackFor = (comment) => ({
     feedback: optimistic[comment.id] ?? comment.feedback,
     error: errors[comment.id],
+    readOnly,
     onFeedback: async (value) => {
       const previous = optimistic[comment.id];
       setOptimistic((o) => ({ ...o, [comment.id]: value }));
@@ -120,7 +125,7 @@ function ReviewView({ review, refresh }: { review: Review; refresh: () => void }
               <ExternalLink aria-hidden className="size-4 text-muted" />
               <span className="sr-only">(opens in a new tab)</span>
             </a>
-            {review.status === "done" && <MoreMenu reviewId={review.id} onStarted={refresh} />}
+            {review.status === "done" && !readOnly && <MoreMenu reviewId={review.id} onStarted={refresh} />}
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
@@ -167,7 +172,7 @@ function ReviewView({ review, refresh }: { review: Review; refresh: () => void }
           <div className="min-w-0">
             <p className="font-mono text-sm text-fg">This review failed</p>
             <p className="mt-1 text-sm text-muted [overflow-wrap:anywhere]">{review.errorMessage ?? "No error message was saved."}</p>
-            <RerunButton reviewId={review.id} onStarted={refresh} />
+            {!readOnly && <RerunButton reviewId={review.id} onStarted={refresh} />}
           </div>
         </div>
       )}
