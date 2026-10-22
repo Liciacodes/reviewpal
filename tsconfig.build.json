@@ -1,0 +1,14 @@
+{
+  // Production build (npm run build): compiles src/ to dist/, without the tests.
+  // Everything else (strictness, ESM "nodenext") comes from tsconfig.json.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": true
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
+}

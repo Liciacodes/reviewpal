@@ -18,6 +18,9 @@ const nextConfig: NextConfig = {
   },
   partialPrefetching: true,
   turbopack: {
+    // The repo has two lockfiles (server in the root, dashboard here). Next.js runs from web/
+    // locally and on Vercel (Root Directory "web"), so that's the dashboard's root.
+    root: process.cwd(),
     rules: {
       "*.css": {
         loaders: ["@tailwindcss/turbopack"],

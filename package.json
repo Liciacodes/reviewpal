@@ -12,7 +12,10 @@
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
     "test:watch": "vitest",
-    "test:all": "npm test && npm --prefix web test"
+    "test:all": "npm test && npm --prefix web test",
+    "build": "prisma generate && tsc -p tsconfig.build.json",
+    "start": "node --enable-source-maps dist/index.js",
+    "migrate:deploy": "prisma migrate deploy"
   },
   "keywords": [],
   "author": "",
@@ -37,5 +40,8 @@
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": "22.x"
   }
 }

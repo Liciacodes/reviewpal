@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import './check-config.js'; // first: stops with a clear list if a setting is missing
 import cookieParser from 'cookie-parser';
 import express from 'express';
 import crypto from 'node:crypto';
@@ -6,12 +7,12 @@ import { apiRouter } from './api.js';
 import { authRouter } from './auth/routes.js';
 import { requireCsrf, requireUser } from './auth/session.js';
 import { githubApp } from './github-app.js';
+import { redeliverMissedWebhooks } from './missed-webhooks.js';
 import { runReview, startStuckReviewSweeper } from './pipeline.js';
 
 const app = express();
 
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
-if (!WEBHOOK_SECRET) throw new Error('WEBHOOK_SECRET is missing');
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET!; // checked by check-config.ts
 
 app.get('/health', (req, res) => {
   res.status(200).send('OK');
@@ -60,4 +61,9 @@ app.listen(PORT, () => {
   console.log(`ReviewPal running on port ${PORT}`);
   // Reviews left "pending" by a restart (or hanging) become "failed", now and every 5 minutes
   startStuckReviewSweeper();
+  // Production only: webhooks GitHub couldn't deliver while we were asleep or restarting.
+  // A few seconds' delay so the server is surely ready to receive them.
+  if (process.env.NODE_ENV === 'production') {
+    setTimeout(() => void redeliverMissedWebhooks(githubApp), 5000).unref();
+  }
 });

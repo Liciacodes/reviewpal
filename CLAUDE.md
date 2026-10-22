@@ -8,7 +8,11 @@ review on the pull request itself. Users sign in with GitHub and only see review
 for repos where the app is installed and they have access.
 
 ## Stack
-- **API / webhook server**: Express 5 + TypeScript, run with `tsx` (no build step in dev)
+- **API / webhook server**: Express 5 + TypeScript, run with `tsx` in dev (no build step);
+  in production `npm run build` compiles `src/` to `dist/` (`tsconfig.build.json`, tests excluded)
+  and `npm start` runs `node dist/index.js`
+- **Hosting**: API on Render (free tier), dashboard on Vercel (Root Directory `web`), database on
+  Neon. Step-by-step setup and which env var goes where: `DEPLOY.md`
 - **GitHub**: `octokit`, one shared `App` in `src/github-app.ts`: installation tokens for
   webhooks and posting reviews, plus the App's own OAuth (`GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET`) for sign-in
 - **AI**: `groq-sdk`, default model `openai/gpt-oss-120b` (override with `GROQ_MODEL`).
@@ -30,7 +34,14 @@ for repos where the app is installed and they have access.
 
 ## Layout
 - `src/index.ts`: Express app, `/health`, `/webhook` (signature check), `/auth`, `/api`
-  (behind `requireUser` + `requireCsrf`); starts the stuck-review sweeper
+  (behind `requireUser` + `requireCsrf`); starts the stuck-review sweeper and, in production,
+  the missed-webhook redelivery
+- `src/check-config.ts`: imported first by `index.ts`; exits with a list of missing/invalid settings
+- `src/config.ts`: `configProblems()` (required env vars, by name only) and `loadPrivateKey()`
+  (`GITHUB_PRIVATE_KEY_PATH` file, e.g. a Render Secret File, or `GITHUB_PRIVATE_KEY` with `
+` escapes) (pure)
+- `src/missed-webhooks.ts`: on production startup, asks GitHub to redeliver `pull_request` webhooks
+  that failed in the last 6 hours (Render's free tier sleeps; GitHub waits only 10s)
 - `src/pipeline.ts`: `runReview(payload)` (webhook: creates the pending Review) ->
   `processReview(id)` (files -> AI -> DB -> post to GitHub; also used by re-runs),
   `prepareRerun()`, `markStuckReviews()` (pending > 10 min since `startedAt` -> failed)
@@ -66,6 +77,8 @@ for repos where the app is installed and they have access.
 - `npm run db:studio`: browse the database in the browser
 - `npx tsc --noEmit`: type-check the server
 - `npm test` / `npm run test:watch`: server tests; `npm run test:all`: server + dashboard tests
+- `npm run build` / `npm start`: production build to `dist/` and run it (what Render does)
+- `npm run migrate:deploy`: apply pending migrations without prompts (production; Render runs it in its build)
 - `cd web && npm run dev`: start the dashboard on port 3001
 - `cd web && npm run lint` / `npm run build` / `npm test`: check the dashboard
 
@@ -80,6 +93,9 @@ for repos where the app is installed and they have access.
 - **Every `/api` route is for signed-in users** and must check access with `canAccessRepo` /
   `visibleRepoIds` (404 when not allowed). Changes (non-GET) need the CSRF header.
 - Keep logic that can be pure in pure modules, with Vitest tests next to them.
+- **New env var?** Add it to `REQUIRED` in `src/config.ts` (if the server needs it), to `.env`,
+  and to the table in `DEPLOY.md` (Render or Vercel). Dashboard env vars used in `next.config.ts`
+  are baked in at build time: changing one on Vercel needs a redeploy.
 - The owner is learning: after every change, explain in plain language what
   changed and why, list the files, and give exact steps to run and test it.
 - Work in small phases and stop after each one so it can be tested.

@@ -2,7 +2,7 @@
 // These run behind the dashboard's rewrites, so relative redirects land on the dashboard.
 import express, { type Response } from 'express';
 import { prisma } from '../db.js';
-import { githubApp, oauthConfigured } from '../github-app.js';
+import { githubApp } from '../github-app.js';
 import { safeNext } from './access.js';
 import { randomToken, safeEqual } from './crypto.js';
 import { encryptTokens, fetchAllowedRepos, fetchProfile } from './github-user.js';
@@ -23,9 +23,6 @@ function backToSignIn(res: Response, message: string) {
 
 // 1. Start: remember a random `state`, then send the browser to GitHub
 authRouter.get('/login', (req, res) => {
-  if (!oauthConfigured || !process.env.TOKEN_ENCRYPTION_KEY) {
-    return backToSignIn(res, 'Sign-in is not set up on the server yet.');
-  }
   const state = randomToken();
   const next = safeNext(req.query.next);
   res.cookie(OAUTH_COOKIE, JSON.stringify({ state, next }), cookieOptions(OAUTH_TTL_MS));
