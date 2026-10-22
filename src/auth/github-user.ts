@@ -4,7 +4,7 @@ import { Octokit } from 'octokit';
 import { prisma } from '../db.js';
 import { githubApp } from '../github-app.js';
 import { isStale, parseAllowedRepos, type AllowedRepo } from './access.js';
-import { decrypt, encrypt, parseKey } from './crypto.js';
+import { decrypt, encrypt, parseKey, tryDecrypt } from './crypto.js';
 
 // Read lazily so the server can start (webhooks keep working) before sign-in is configured
 let cachedKey: Buffer | undefined;
@@ -59,7 +59,16 @@ type StoredUser = {
 // A usable token: the stored one, or a fresh one if it expires within a minute
 async function validToken(user: StoredUser, now: Date): Promise<string> {
   const expiresSoon = user.accessTokenExpires && user.accessTokenExpires.getTime() - 60_000 < now.getTime();
-  if (!expiresSoon) return decrypt(user.accessToken, key());
+  if (!expiresSoon) {
+    const token = tryDecrypt(user.accessToken, key());
+    if (token === null) {
+      // Usually: local and production share one database but have different TOKEN_ENCRYPTION_KEYs,
+      // so the last sign-in on one makes the token unreadable on the other. Ask for a new sign-in.
+      console.warn('Stored GitHub token is unreadable with this TOKEN_ENCRYPTION_KEY (different key at sign-in?). Asking the user to sign in again.');
+      throw new GitHubAccessRevoked('Stored token unreadable');
+    }
+    return token;
+  }
   if (!user.refreshToken) throw new GitHubAccessRevoked('Token expired');
 
   try {

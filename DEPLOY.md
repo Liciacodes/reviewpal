@@ -23,11 +23,13 @@ Work through the steps in order. Wherever you see `<api>` or `<dashboard>`, use 
   - Render service name, e.g. `reviewpal-api` → `https://reviewpal-api.onrender.com`
   - Vercel project name, e.g. `reviewpal` → `https://reviewpal.vercel.app`
   - If a name is taken, the URL gets a suffix. Then use the real URL in the later steps.
-- [ ] Database: you can keep the same Neon database. Then local and production share the same
-  reviews, which is fine for a personal project. For separate data, create a Neon branch called
-  `production` and use its two URLs below.
-- [ ] Generate a **new** `TOKEN_ENCRYPTION_KEY` for production:
-  `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
+- [ ] Database and encryption key: decide together, because they must match.
+  - **Same Neon database as local** (simplest; production's demo then shows the reviews you already have):
+    use the **same** `TOKEN_ENCRYPTION_KEY` as your local `.env`. Your GitHub token is stored once per user,
+    encrypted with the key of the environment you last signed in to. With two different keys, signing in on one
+    makes the other fail with "Couldn't check your GitHub access" (since then it asks you to sign in again).
+  - **Separate data:** create a Neon branch called `production`, use its two URLs below, and generate a
+    **new** key: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
 
 ## Which settings go where
 
@@ -42,7 +44,7 @@ Work through the steps in order. Wherever you see `<api>` or `<dashboard>`, use 
 | `GITHUB_PRIVATE_KEY` | (alternative) | | the whole `.pem` content, only if you don't use the Secret File |
 | `GITHUB_CLIENT_ID` | ✅ | | Client ID (General → About) |
 | `GITHUB_CLIENT_SECRET` | ✅ | | from the Credentials tab |
-| `TOKEN_ENCRYPTION_KEY` | ✅ | | the new key from step 0 |
+| `TOKEN_ENCRYPTION_KEY` | ✅ | | same as local if you share the database, a new one if not (step 0) |
 | `DASHBOARD_URL` | ✅ | | `https://<dashboard>.vercel.app` (no trailing slash) |
 | `GROQ_API_KEY` | ✅ | | from console.groq.com |
 | `GROQ_MODEL` | optional | | leave unset for `openai/gpt-oss-120b` |
@@ -169,7 +171,7 @@ This covers deploys and any missed ping.
   no ⋯ menu, and the sidebar says "Demo visitor". **Sign in** in the banner takes you back to the sign-in page.
 
 - [ ] **Sign-in:** open `https://<dashboard>.vercel.app`, then **Sign in with GitHub**, then authorize. You land on the
-  Overview, with your avatar in the sidebar. Production uses a new encryption key, so this is a fresh sign-in.
+  Overview, with your avatar in the sidebar.
 - [ ] **Your data:** your playground reviews are listed (if you kept the same database), and stats show.
 - [ ] **Cookies:** in DevTools → Application → Cookies on the Vercel domain, `rp_session` has
   **HttpOnly** and **Secure** ticked and SameSite **Lax**.
@@ -198,6 +200,7 @@ This covers deploys and any missed ping.
 | Dashboard shows "Can't reach the API", or `/health` on Vercel fails | `API_ORIGIN` is wrong or was set after the build (redeploy on Vercel), or Render is waking up (try again in a minute) |
 | Recent Deliveries show timeouts | The keep-alive isn't running. The safety net catches them on the next restart. |
 | Everyone was signed out after a deploy | `TOKEN_ENCRYPTION_KEY` changed. Expected; just sign in again |
+| Signing in locally signs you out in production (or the other way round) | Shared database with two different `TOKEN_ENCRYPTION_KEY`s: use the same key on both (step 0) |
 | **View demo** shows "The demo isn't available right now." | `DEMO_REPO` isn't set on Render (or the service wasn't restarted after setting it) |
 | Demo shows no reviews | `DEMO_REPO` has a typo, or that repo has no reviews in this database yet |
 

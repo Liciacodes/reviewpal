@@ -29,6 +29,16 @@ export function decrypt(value: string, key: Buffer): string {
   return Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
 }
 
+// Like decrypt(), but null instead of an error when the value can't be read
+// (changed, or encrypted with a different key)
+export function tryDecrypt(value: string, key: Buffer): string | null {
+  try {
+    return decrypt(value, key);
+  } catch {
+    return null;
+  }
+}
+
 // A random, URL-safe token (32 bytes = 256 bits)
 export function randomToken(): string {
   return crypto.randomBytes(32).toString('base64url');

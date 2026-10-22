@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { decrypt, encrypt, parseKey, randomToken, safeEqual, sha256 } from './crypto.js';
+import { decrypt, encrypt, parseKey, randomToken, safeEqual, sha256, tryDecrypt } from './crypto.js';
 
 // A throwaway key for the tests (never a real one)
 const key = crypto.randomBytes(32);
@@ -27,6 +27,21 @@ describe('encrypt / decrypt', () => {
 
   it('refuses the wrong key', () => {
     expect(() => decrypt(encrypt('secret', key), crypto.randomBytes(32))).toThrow();
+  });
+});
+
+describe('tryDecrypt', () => {
+  it('reads a value encrypted with the same key', () => {
+    expect(tryDecrypt(encrypt('ghu_example_token', key), key)).toBe('ghu_example_token');
+  });
+
+  it('gives null (no crash) for a value encrypted with another key, e.g. local vs production', () => {
+    const otherEnvironmentsKey = crypto.randomBytes(32);
+    expect(tryDecrypt(encrypt('ghu_example_token', otherEnvironmentsKey), key)).toBeNull();
+  });
+
+  it('gives null for a malformed value', () => {
+    expect(tryDecrypt('not-encrypted', key)).toBeNull();
   });
 });
 
