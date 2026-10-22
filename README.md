@@ -143,6 +143,7 @@ Environment variables (names only; see `.env.example`):
 | `DASHBOARD_URL` | Dashboard address, used for the sign-in callback |
 | `DEMO_REPO` (optional) | The public repo shown in the read-only demo, e.g. `Liciacodes/reviewpal-playground` |
 | `API_ORIGIN` (dashboard, optional) | Where the dashboard forwards API calls (default `http://localhost:3000`) |
+| `PUBLIC_SIGNIN` (dashboard, optional) | `true` makes "Sign in with GitHub" the main button; default: "View demo" is |
 
 If anything required is missing, the server refuses to start and lists the missing names.
 For production on Render and Vercel, see **[DEPLOY.md](DEPLOY.md)**.
@@ -168,3 +169,4 @@ They don't need a database, network access or API keys.
 - **Public install with usage limits:** let anyone install ReviewPal, with per-installation limits on AI usage.
 - **Learning from ratings:** use the useful / not useful ratings to tune the prompt and drop the kinds of comments people don't find helpful.
 - **Background job queue:** move reviews out of the web process into a queue with retries, so restarts and slow reviews don't affect each other.
+- **Separate production database:** a Neon branch for production, so local testing never touches live data.

@@ -65,7 +65,11 @@ for repos where the app is installed and they have access.
 - `web/`: the dashboard (Next.js 16, App Router)
   - `web/app/(dashboard)/`: the signed-in pages (`/`, `/reviews`, `/reviews/[id]`, `/settings`)
     with the sidebar layout and `loading.tsx` skeletons; `web/app/sign-in/`: the sign-in page (no sidebar)
-  - `web/proxy.ts`: redirects to `/sign-in` when there is no session or demo cookie (cookie check only)
+  - `web/proxy.ts`: redirects to `/sign-in` when there is no session or demo cookie (cookie check only).
+    Its `matcher` lists the dashboard pages only (`/`, `/reviews/*`, `/settings/*`): **add new dashboard pages
+    there**. Every other address shows `web/app/not-found.tsx` (404; "Go to overview" or "View demo")
+  - `web/app/sign-in/`: "View demo" is the main button unless `PUBLIC_SIGNIN=true` (read when the page is
+    built, so a change on Vercel needs a redeploy). The GitHub App is private: other accounts get a 404 from GitHub
   - `web/components/`: UI pieces; `web/components/review/`: diff view, comment cards, re-run controls
   - `web/lib/`: API client (`api.ts`: CSRF header on changes, 401 -> `/sign-in`), `useApi` hook
     (`retry()` shows loading, `refresh()` is quiet), diff parser, time helpers

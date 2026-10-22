@@ -50,6 +50,7 @@ Work through the steps in order. Wherever you see `<api>` or `<dashboard>`, use 
 | `GROQ_MODEL` | optional | | leave unset for `openai/gpt-oss-120b` |
 | `DEMO_REPO` | optional | | `Liciacodes/reviewpal-playground`: the public repo shown in the read-only demo (leave unset to turn the demo off) |
 | `API_ORIGIN` | | ✅ | `https://<api>.onrender.com` (no trailing slash) |
+| `PUBLIC_SIGNIN` | | optional | leave unset while the GitHub App is private ("View demo" is the main button); `true` once anyone can sign in. Needs a redeploy to change |
 
 - Render sets `PORT` by itself.
 - `DASHBOARD_ORIGIN` and `NEXT_PUBLIC_API_URL` are not used any more.

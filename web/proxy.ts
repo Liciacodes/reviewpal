@@ -14,9 +14,8 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    // Every page except: the sign-in page, what the API handles (/api, /auth, /health),
-    // Next.js internals and static files
-    "/((?!sign-in|api|auth|health|_next/static|_next/image|icon.svg|favicon.ico|robots.txt).*)",
-  ],
+  // Only the real dashboard pages. Any other address goes straight to the 404 page (app/not-found.tsx),
+  // so a visitor following a broken link sees "This page doesn't exist" instead of the sign-in page.
+  // When you add a dashboard page, add it here too.
+  matcher: ["/", "/reviews/:path*", "/settings/:path*"],
 };

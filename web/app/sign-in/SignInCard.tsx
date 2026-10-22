@@ -4,6 +4,7 @@ import { Eye, LoaderCircle, LogIn, TriangleAlert } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/Sidebar";
+import { PRIMARY, SECONDARY } from "@/lib/button-styles";
 
 // The only messages the server sends (src/auth/routes.ts). Anything else in ?error is shown
 // as a generic message, so a crafted link can't put its own text on this page.
@@ -18,18 +19,21 @@ const KNOWN_ERRORS = new Set([
 // After this long without leaving the page, the API is probably waking up (Render free plan)
 const WAKING_AFTER_MS = 3000;
 
-export function SignInFromUrl() {
+export function SignInFromUrl({ publicSignIn }: { publicSignIn: boolean }) {
   const params = useSearchParams();
   const error = params.get("error");
   return (
     <SignInCard
       next={params.get("next") ?? "/"}
       error={error === null ? null : KNOWN_ERRORS.has(error) ? error : "Sign-in failed. Please try again."}
+      publicSignIn={publicSignIn}
     />
   );
 }
 
-export function SignInCard({ next, error }: { next: string; error: string | null }) {
+// publicSignIn: GitHub sign-in is the main button (PUBLIC_SIGNIN=true). Otherwise the demo is.
+export function SignInCard({ next, error, publicSignIn }: { next: string; error: string | null; publicSignIn: boolean }) {
+  const githubHref = `/auth/login?next=${encodeURIComponent(next)}`;
   const [leaving, setLeaving] = useState<"github" | "demo" | null>(null);
   const [waking, setWaking] = useState(false);
 
@@ -73,24 +77,33 @@ export function SignInCard({ next, error }: { next: string; error: string | null
 
       {/* Plain links, not fetch: the browser must actually go to GitHub (or into the demo).
           The server checks `next` too (safeNext), so it can't send you to another site. */}
-      <div className="mt-8 flex flex-wrap gap-3">
-        <a
-          href={`/auth/login?next=${encodeURIComponent(next)}`}
-          onClick={() => setLeaving("github")}
-          className="inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-canvas transition-colors duration-150 hover:bg-amber-300"
-        >
-          <LogIn aria-hidden className="size-4" />
-          {leaving === "github" ? "Opening GitHub…" : "Sign in with GitHub"}
-        </a>
-        <a
-          href="/auth/demo"
-          onClick={() => setLeaving("demo")}
-          className="inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-line bg-surface px-4 py-2.5 text-sm text-fg transition-colors duration-150 hover:border-muted"
-        >
-          <Eye aria-hidden className="size-4 text-muted" />
-          {leaving === "demo" ? "Opening demo…" : "View demo"}
-        </a>
-      </div>
+      {publicSignIn ? (
+        // Open sign-in: GitHub is the main action, the demo sits next to it
+        <div className="mt-8 flex flex-wrap gap-3">
+          <a href={githubHref} onClick={() => setLeaving("github")} className={`flex-1 ${PRIMARY}`}>
+            <LogIn aria-hidden className="size-4" />
+            {leaving === "github" ? "Opening GitHub…" : "Sign in with GitHub"}
+          </a>
+          <a href="/auth/demo" onClick={() => setLeaving("demo")} className={`flex-1 ${SECONDARY}`}>
+            <Eye aria-hidden className="size-4 text-muted" />
+            {leaving === "demo" ? "Opening demo…" : "View demo"}
+          </a>
+        </div>
+      ) : (
+        // Beta: the GitHub App is private, so sign-in only works for invited accounts (others get
+        // a 404 from GitHub). The demo is the main way in.
+        <div className="mt-8 flex flex-col gap-3">
+          <a href="/auth/demo" onClick={() => setLeaving("demo")} className={PRIMARY}>
+            <Eye aria-hidden className="size-4" />
+            {leaving === "demo" ? "Opening demo…" : "View demo"}
+          </a>
+          <a href={githubHref} onClick={() => setLeaving("github")} className={SECONDARY}>
+            <LogIn aria-hidden className="size-4 text-muted" />
+            {leaving === "github" ? "Opening GitHub…" : "Sign in with GitHub"}
+          </a>
+          <p className="text-xs text-muted">Sign-in is limited to invited accounts during the beta.</p>
+        </div>
+      )}
 
       {waking && (
         <p role="status" className="mt-4 flex items-start gap-2 text-sm text-muted">
@@ -102,8 +115,9 @@ export function SignInCard({ next, error }: { next: string; error: string | null
       )}
 
       <p className="mt-4 text-xs text-muted">
-        You&apos;ll only see repositories where ReviewPal is installed and you have access. The demo shows a sample
-        repository, read-only.
+        {publicSignIn
+          ? "You'll only see repositories where ReviewPal is installed and you have access. The demo shows a sample repository, read-only."
+          : "The demo shows real AI reviews of a sample repository, read-only. No account needed."}
       </p>
     </div>
   );
