@@ -17,7 +17,7 @@ export type Delivery = {
   delivered_at: string;
 };
 
-const WANTED_ACTIONS = new Set(['opened', 'synchronize']); // the ones runReview acts on
+const WANTED_ACTIONS = new Set(['opened', 'synchronize', 'reopened', 'ready_for_review']); // the ones runReview acts on
 const succeeded = (d: Delivery) => d.status_code >= 200 && d.status_code < 300;
 
 // Which deliveries to ask GitHub to send again. Pure.

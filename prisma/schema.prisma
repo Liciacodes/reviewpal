@@ -14,6 +14,7 @@ enum ReviewStatus {
   pending
   done
   failed
+  skipped // not reviewed on purpose: PR too large or a daily limit reached (see Review.skipReason)
 }
 
 enum Severity {
@@ -35,8 +36,10 @@ model Repo {
   installationId Int
   createdAt      DateTime @default(now())
   reviews        Review[]
+  notices        PrNotice[]
 
   @@unique([owner, name])
+  @@index([installationId])
 }
 
 // One AI review of one commit (headSha) of a pull request
@@ -49,6 +52,7 @@ model Review {
   prUrl        String
   headSha      String
   status       ReviewStatus    @default(pending)
+  skipReason   String?         // when status is skipped: too_large | installation_limit | global_limit
   errorMessage String?         @db.Text
   model        String
   filesChanged Int             @default(0)
@@ -123,4 +127,27 @@ model Session {
   createdAt DateTime @default(now())
 
   @@index([userId])
+}
+
+// One row per AI call (a webhook review or a re-run), to enforce the daily limits (src/limits.ts)
+model AiUsage {
+  id             String   @id @default(cuid())
+  installationId Int
+  reviewId       String?
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([installationId, createdAt])
+}
+
+// "We already commented on this PR about this" (e.g. the daily limit), so each notice is posted once
+model PrNotice {
+  id        String   @id @default(cuid())
+  repoId    String
+  repo      Repo     @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  prNumber  Int
+  kind      String // too_large | limit
+  createdAt DateTime @default(now())
+
+  @@unique([repoId, prNumber, kind])
 }

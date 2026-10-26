@@ -25,12 +25,25 @@ async function myRepoIds(req: Request): Promise<string[]> {
   return visibleRepoIds(repos, auth(req).allowed);
 }
 
+// Where people install ReviewPal on their repos. Asked from GitHub once, then remembered.
+let cachedInstallUrl: string | undefined;
+async function installUrl(): Promise<string | null> {
+  if (cachedInstallUrl) return cachedInstallUrl;
+  try {
+    const { data } = await githubApp.octokit.request('GET /app');
+    if (data?.html_url) cachedInstallUrl = `${data.html_url}/installations/new`;
+  } catch {
+    // Not fatal: the dashboard just hides the install button
+  }
+  return cachedInstallUrl ?? null;
+}
+
 // GET /api/me: who is signed in (for the sidebar), or the demo visitor (no personal data)
-apiRouter.get('/me', (req, res) => {
+apiRouter.get('/me', async (req, res) => {
   const a = auth(req);
-  if (a.kind === 'demo') return res.json(DEMO_PROFILE);
+  if (a.kind === 'demo') return res.json({ ...DEMO_PROFILE, installUrl: await installUrl() });
   const { login, name, avatarUrl } = a.user;
-  res.json({ login, name, avatarUrl, demo: false });
+  res.json({ login, name, avatarUrl, demo: false, installUrl: await installUrl() });
 });
 
 // GET /api/reviews: the 50 newest reviews the user can see, with comment counts
@@ -53,6 +66,7 @@ apiRouter.get('/reviews', async (req, res) => {
       prTitle: review.prTitle,
       prUrl: review.prUrl,
       status: review.status,
+      skipReason: review.skipReason,
       filesChanged: review.filesChanged,
       createdAt: review.createdAt,
       commentCount: comments.length,

@@ -7,6 +7,7 @@ import { apiRouter } from './api.js';
 import { authRouter } from './auth/routes.js';
 import { apiGuards, requireUser } from './auth/session.js';
 import { githubApp } from './github-app.js';
+import { handleInstallationEvent } from './installations.js';
 import { redeliverMissedWebhooks } from './missed-webhooks.js';
 import { runReview, startStuckReviewSweeper } from './pipeline.js';
 
@@ -18,6 +19,9 @@ app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
 app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  // 0. No JSON body (express.raw only reads application/json): nothing GitHub signed, so reject
+  if (!Buffer.isBuffer(req.body)) return res.status(401).send('Invalid signature');
+
   // 1. The signature GitHub sent
   const signature = req.header('x-hub-signature-256') ?? '';
 
@@ -41,9 +45,12 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
   // 5. Reply to GitHub quickly, then do the slow work
   res.status(200).send('ok');
 
-  // 6. When a PR is opened or updated, run the review (it saves everything and never throws)
-  if (event === 'pull_request' && ['opened', 'synchronize'].includes(payload.action)) {
+  // 6. Pull requests: runReview decides (bots, drafts, size, daily limits) and never throws.
+  //    Installs and uninstalls keep the database in sync (uninstall deletes that data).
+  if (event === 'pull_request') {
     await runReview(githubApp, payload);
+  } else if (event === 'installation' || event === 'installation_repositories') {
+    await handleInstallationEvent(event, payload);
   }
 });
 

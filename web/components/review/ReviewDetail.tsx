@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowLeft, CircleCheck, ExternalLink, FileCode, GitPullRequest, LoaderCircle, TriangleAlert } from "lucide-react";
+import { ArrowLeft, CircleCheck, CircleSlash, ExternalLink, FileCode, GitPullRequest, LoaderCircle, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { getMe, getReview, setFeedback } from "@/lib/api";
+import { canRerunSkipped, skipMessage } from "@/lib/skip";
 import type { Feedback, ReviewComment, ReviewDetail as Review } from "@/lib/types";
 import { useApi } from "@/lib/use-api";
 import { SeverityCounts, StatusBadge } from "../badges";
@@ -177,6 +178,18 @@ function ReviewView({ review, refresh }: { review: Review; refresh: () => void }
         </div>
       )}
 
+      {review.status === "skipped" && (
+        <div role="status" className="mb-8 flex gap-3 rounded-lg border border-amber-400/30 bg-amber-400/5 p-4">
+          <CircleSlash aria-hidden className="mt-0.5 size-4 shrink-0 text-amber-400" />
+          <div className="min-w-0">
+            <p className="font-mono text-sm text-fg">{skipMessage(review.skipReason).title}</p>
+            <p className="mt-1 text-sm text-muted">{skipMessage(review.skipReason).detail}</p>
+            {/* The server checks the limits again, so an early click just explains they're still reached */}
+            {!readOnly && canRerunSkipped(review.skipReason) && <RerunButton reviewId={review.id} onStarted={refresh} />}
+          </div>
+        </div>
+      )}
+
       {pending && (
         <div role="status" className="mb-8 flex items-center gap-3 rounded-lg border border-line bg-surface p-4">
           <LoaderCircle aria-hidden className="size-4 shrink-0 animate-spin text-muted motion-reduce:animate-none" />
@@ -188,7 +201,11 @@ function ReviewView({ review, refresh }: { review: Review; refresh: () => void }
         <div className="mb-4"><SectionLabel id="files-heading">Files changed</SectionLabel></div>
         {review.files.length === 0 ? (
           <EmptyState icon={FileCode} title="No files saved">
-            {review.status === "pending" ? "Files appear here once they are fetched." : "This review has no changed files."}
+            {review.status === "pending"
+              ? "Files appear here once they are fetched."
+              : review.status === "skipped"
+                ? "Skipped reviews don't fetch the files. See them on GitHub."
+                : "This review has no changed files."}
           </EmptyState>
         ) : (
           <div className="space-y-6">

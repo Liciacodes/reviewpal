@@ -1,4 +1,4 @@
-import { Bug, CircleCheck, CircleX, Clock, Paintbrush, TriangleAlert, type LucideIcon } from "lucide-react";
+import { Bug, CircleCheck, CircleSlash, CircleX, Clock, Paintbrush, TriangleAlert, type LucideIcon } from "lucide-react";
 import type { ReviewStatus, Severity, SeverityCounts as Counts } from "@/lib/types";
 
 // Severity colours are always paired with an icon and a text label, never colour alone
@@ -31,11 +31,11 @@ export function presentSeverities(counts: Counts): Severity[] {
 }
 
 // Compact "2 bugs · 1 risk" counts. Zero counts are left out.
-// With no comments at all: "Reviewing…" while pending, nothing if failed (the badge says so), else "No comments".
+// With no comments at all: "Reviewing…" while pending, nothing if failed or skipped (the badge says so), else "No comments".
 export function SeverityCounts({ counts, status }: { counts: Counts; status: ReviewStatus }) {
   const present = presentSeverities(counts);
   if (present.length === 0) {
-    if (status === "failed") return null;
+    if (status === "failed" || status === "skipped") return null;
     return (
       <span className="font-mono text-xs text-muted">{status === "pending" ? "Reviewing…" : "No comments"}</span>
     );
@@ -56,6 +56,7 @@ const STATUS: Record<ReviewStatus, { label: string; icon: LucideIcon; className:
   done: { label: "Done", icon: CircleCheck, className: "text-emerald-400 border-emerald-400/30" },
   pending: { label: "Pending", icon: Clock, className: "text-muted border-line" },
   failed: { label: "Failed", icon: CircleX, className: "text-red-400 border-red-400/30" },
+  skipped: { label: "Skipped", icon: CircleSlash, className: "text-amber-400 border-amber-400/30" },
 };
 
 export function StatusBadge({ status }: { status: ReviewStatus }) {

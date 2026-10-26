@@ -1,7 +1,9 @@
 // Shapes returned by the ReviewPal API (see src/api.ts in the server).
 // Dates arrive as ISO strings because they travel as JSON.
 
-export type ReviewStatus = "pending" | "done" | "failed";
+export type ReviewStatus = "pending" | "done" | "failed" | "skipped";
+// Why a review was skipped (no AI call): see src/limits.ts in the server
+export type SkipReason = "too_large" | "installation_limit" | "global_limit";
 export type Severity = "bug" | "risk" | "style";
 export type Feedback = "useful" | "not_useful";
 
@@ -14,6 +16,7 @@ export type ReviewSummary = {
   prTitle: string;
   prUrl: string;
   status: ReviewStatus;
+  skipReason: SkipReason | null; // set when status is "skipped"
   filesChanged: number;
   createdAt: string;
   commentCount: number;
@@ -45,6 +48,7 @@ export type ReviewDetail = {
   prUrl: string;
   headSha: string;
   status: ReviewStatus;
+  skipReason: SkipReason | null; // set when status is "skipped"
   errorMessage: string | null;
   model: string;
   filesChanged: number;
@@ -62,6 +66,7 @@ export type Me = {
   name: string | null;
   avatarUrl: string | null;
   demo: boolean; // true: read-only demo of DEMO_REPO (no rating, no re-run)
+  installUrl: string | null; // the GitHub App's install page; null if the API couldn't ask GitHub
 };
 
 export type Stats = {

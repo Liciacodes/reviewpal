@@ -9,6 +9,7 @@ import type { ReviewSummary } from "@/lib/types";
 import { useApi } from "@/lib/use-api";
 import { SeverityCounts, StatusBadge } from "./badges";
 import { RelativeTime } from "./RelativeTime";
+import { InstallButton } from "./InstallButton";
 import { EmptyState, ErrorState, LoadingRegion, Skeleton } from "./states";
 
 // Loads the reviews and shows the right state: skeleton, error, empty or the list
@@ -20,7 +21,10 @@ export function ReviewsList({ limit }: { limit?: number }) {
   if (data.length === 0) {
     return (
       <EmptyState icon={Inbox} title="No reviews yet">
-        Open a PR in a repo where the app is installed.
+        <p>Install ReviewPal on a repository, then open a pull request there. Its review shows up here.</p>
+        <div className="mt-5 flex justify-center">
+          <InstallButton />
+        </div>
       </EmptyState>
     );
   }

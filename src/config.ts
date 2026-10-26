@@ -1,3 +1,5 @@
+import { limitProblems } from './limits.js';
+
 // Checks the server's settings and loads the GitHub App private key.
 // Pure: the environment and a file reader are passed in, so it's easy to test.
 // Never put a variable's VALUE in a message: only its name.
@@ -39,6 +41,9 @@ export function configProblems(env: Env, fileExists: (path: string) => boolean):
   if (isSet(env.DEMO_REPO) && !/^[\w.-]+\/[\w.-]+$/.test(env.DEMO_REPO!.trim())) {
     problems.push('DEMO_REPO must look like owner/name (e.g. Liciacodes/reviewpal-playground), or be left unset');
   }
+
+  // Optional usage limits (src/limits.ts): positive whole numbers when set
+  problems.push(...limitProblems(env));
 
   // In production the sign-in callback must point at the real dashboard, over HTTPS
   if (env.NODE_ENV === 'production') {

@@ -1,11 +1,12 @@
 "use client";
 
-import { GitPullRequest, LayoutDashboard, LogIn, LogOut, Menu, ScanSearch, Settings, X } from "lucide-react";
+import { GitPullRequest, LayoutDashboard, LogIn, LogOut, Menu, ScanSearch, Settings, Shield, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { getMe, signOut } from "@/lib/api";
 import { useApi } from "@/lib/use-api";
+import { InstallButton } from "./InstallButton";
 import { Skeleton } from "./states";
 
 const NAV = [
@@ -140,6 +141,22 @@ function UserMenu() {
   );
 }
 
+// Install link and privacy notice, above the user menu
+function SidebarLinks() {
+  return (
+    <div className="flex flex-col items-start gap-3 px-3">
+      <InstallButton variant="link" />
+      <Link
+        href="/privacy"
+        className="inline-flex items-center gap-2 rounded-md text-sm text-muted transition-colors duration-150 hover:text-fg"
+      >
+        <Shield aria-hidden className="size-4" />
+        Privacy
+      </Link>
+    </div>
+  );
+}
+
 export function Sidebar() {
   const [open, setOpen] = useState(false);
 
@@ -159,7 +176,10 @@ export function Sidebar() {
         <nav aria-label="Main" className="mt-10">
           <Nav />
         </nav>
-        <div className="mt-auto border-t border-line pt-4">
+        <div className="mt-auto">
+          <SidebarLinks />
+        </div>
+        <div className="mt-4 border-t border-line pt-4">
           <UserMenu />
         </div>
       </aside>
@@ -182,6 +202,9 @@ export function Sidebar() {
         {open && (
           <nav id="mobile-nav" aria-label="Main" className="border-t border-line px-4 py-3">
             <Nav onNavigate={() => setOpen(false)} />
+            <div className="mt-3 border-t border-line pt-3">
+              <SidebarLinks />
+            </div>
             <div className="mt-3 border-t border-line pt-3">
               <UserMenu />
             </div>

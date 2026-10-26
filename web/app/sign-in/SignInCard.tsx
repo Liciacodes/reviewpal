@@ -1,6 +1,7 @@
 "use client";
 
 import { Eye, LoaderCircle, LogIn, TriangleAlert } from "lucide-react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/Sidebar";
@@ -118,6 +119,11 @@ export function SignInCard({ next, error, publicSignIn }: { next: string; error:
         {publicSignIn
           ? "You'll only see repositories where ReviewPal is installed and you have access. The demo shows a sample repository, read-only."
           : "The demo shows real AI reviews of a sample repository, read-only. No account needed."}
+      </p>
+      <p className="mt-4 text-xs">
+        <Link href="/privacy" className="text-muted underline underline-offset-2 transition-colors duration-150 hover:text-fg">
+          Privacy: what ReviewPal stores
+        </Link>
       </p>
     </div>
   );

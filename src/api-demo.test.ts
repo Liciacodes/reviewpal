@@ -95,6 +95,7 @@ describe('demo visitors and the real API routes', () => {
   it('shows the demo profile on /api/me, with no personal data', async () => {
     const res = await fetch(baseUrl + '/api/me');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual(DEMO_PROFILE);
+    // installUrl is null here because GitHub is a stand-in in this test
+    expect(await res.json()).toEqual({ ...DEMO_PROFILE, installUrl: null });
   });
 });
