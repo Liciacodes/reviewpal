@@ -6,7 +6,8 @@ When a pull request is opened or updated, ReviewPal reads the diff, asks an LLM 
 comments, and posts them on the pull request as inline comments. A dashboard shows every review
 and lets you rate each comment as useful or not.
 
-**Live dashboard:** https://reviewpal.vercel.app. Click **View demo** to explore a sample repository without signing in (read-only).<br>
+**Install it:** [github.com/apps/reviewpal-ai](https://github.com/apps/reviewpal-ai) (free, with daily limits).<br>
+**Live dashboard:** https://reviewpal.vercel.app. Sign in with GitHub, or click **View demo** to explore a sample repository without signing in (read-only).<br>
 **Example review on GitHub:** [reviewpal-playground#6](https://github.com/Liciacodes/reviewpal-playground/pull/6)
 
 ## Demo
@@ -36,15 +37,18 @@ I use AI tools every day, and I wanted to understand what actually happens behin
 1. **Webhook:** GitHub sends a `pull_request` event when a PR is opened or updated.
 2. **Signature check:** the server verifies the HMAC-SHA256 signature over the raw request body
    and rejects anything that doesn't match.
-3. **Fetch the diff:** it gets the changed files through the GitHub App's installation token.
-4. **Numbered diff to the AI:** every line on the new side is prefixed with its line number, so
+3. **Should it be reviewed?** Bot PRs and drafts are ignored (a draft is reviewed once it's marked ready).
+   PRs that are too large, or arrive after a daily limit is reached, are skipped without calling the AI:
+   the PR gets one short comment saying why.
+4. **Fetch the diff:** it gets the changed files through the GitHub App's installation token.
+5. **Numbered diff to the AI:** every line on the new side is prefixed with its line number, so
    the model can say exactly which line a comment is about.
-5. **Validation:** the model must answer in JSON. The answer is checked with a zod schema before
+6. **Validation:** the model must answer in JSON. The answer is checked with a zod schema before
    anything is saved.
-6. **Save:** the review, files and comments are stored in Postgres.
-7. **Post on GitHub:** one pull request review with inline comments. Comments on lines outside
+7. **Save:** the review, files and comments are stored in Postgres.
+8. **Post on GitHub:** one pull request review with inline comments. Comments on lines outside
    the diff are listed in the review text instead, so nothing is lost.
-8. **Dashboard:** signed-in users see the reviews for their repositories and rate the comments.
+9. **Dashboard:** signed-in users see the reviews for their repositories and rate the comments.
 
 ```mermaid
 flowchart LR
@@ -73,6 +77,13 @@ flowchart LR
 - **GitHub sign-in with per-user access:** users only see reviews for repositories where the app is
   installed and they have access. Everything else returns 404.
 - **Usefulness ratings:** each comment can be rated useful or not useful. The overview shows the share of useful comments.
+- **Usage limits:** at most 10 AI reviews per installation and 100 in total per day (both configurable),
+  so the free Groq quota can't run out. Very large PRs (over 30 files or 3000 changed lines) are skipped. A skipped PR
+  gets one friendly comment, never one per push, and shows as **Skipped** on the dashboard. A Postgres advisory lock
+  makes sure two webhooks arriving at once can't both take the last review of the day.
+- **Install sync and deletion on uninstall:** installing, uninstalling, or adding/removing repos keeps the database in
+  step. Removing a repo, or uninstalling, deletes its reviews, diffs and comments. What's stored is listed on the
+  public [privacy page](https://reviewpal.vercel.app/privacy).
 - **Read-only demo:** visitors can explore one sample repository without signing in. The demo can't see
   any other repository, and the server refuses every write from a demo visitor (a test checks every write route).
 
@@ -115,7 +126,7 @@ flowchart LR
 You need Node.js 22, a PostgreSQL database (a free Neon project works), a Groq API key, and your
 own GitHub App. The app needs **Pull requests: Read and write** permission, a subscription to
 **Pull request** events, and a webhook URL pointing at your machine through a tunnel such as
-[smee.io](https://smee.io).
+[smee.io](https://smee.io). Install and uninstall events are sent to every GitHub App automatically.
 
 ```bash
 git clone https://github.com/Liciacodes/reviewpal.git
@@ -142,8 +153,10 @@ Environment variables (names only; see `.env.example`):
 | `GROQ_API_KEY`, `GROQ_MODEL` (optional) | The LLM |
 | `DASHBOARD_URL` | Dashboard address, used for the sign-in callback |
 | `DEMO_REPO` (optional) | The public repo shown in the read-only demo, e.g. `Liciacodes/reviewpal-playground` |
+| `REVIEWS_PER_INSTALLATION_PER_DAY`, `REVIEWS_PER_DAY` (optional) | Daily AI review limits per installation and in total (defaults 10 and 100, reset at midnight UTC) |
+| `MAX_PR_FILES`, `MAX_PR_LINES` (optional) | Larger PRs are skipped with a comment (defaults 30 files, 3000 changed lines) |
 | `API_ORIGIN` (dashboard, optional) | Where the dashboard forwards API calls (default `http://localhost:3000`) |
-| `PUBLIC_SIGNIN` (dashboard, optional) | `true` makes "Sign in with GitHub" the main button; default: "View demo" is |
+| `PUBLIC_SIGNIN` (dashboard, optional) | `true` (once the GitHub App is public) makes "Sign in with GitHub" the main button; default: "View demo" is |
 
 If anything required is missing, the server refuses to start and lists the missing names.
 For production on Render and Vercel, see **[DEPLOY.md](DEPLOY.md)**.
@@ -160,13 +173,14 @@ The tests cover the logic that is easy to get wrong:
 - splitting comments between inline and the review text
 - retry decisions and the stuck-review rule
 - access control, the read-only demo and session crypto
+- the usage limits (per installation, global, large PRs, bots and drafts) and "one notice per PR"
+- install sync, and deleting a repo's data on uninstall
 - startup config checks and webhook redelivery
 
 They don't need a database, network access or API keys.
 
 ## What's next
 
-- **Public install with usage limits:** let anyone install ReviewPal, with per-installation limits on AI usage.
 - **Learning from ratings:** use the useful / not useful ratings to tune the prompt and drop the kinds of comments people don't find helpful.
 - **Background job queue:** move reviews out of the web process into a queue with retries, so restarts and slow reviews don't affect each other.
 - **Separate production database:** a Neon branch for production, so local testing never touches live data.

@@ -49,13 +49,19 @@ Work through the steps in order. Wherever you see `<api>` or `<dashboard>`, use 
 | `GROQ_API_KEY` | ✅ | | from console.groq.com |
 | `GROQ_MODEL` | optional | | leave unset for `openai/gpt-oss-120b` |
 | `DEMO_REPO` | optional | | `Liciacodes/reviewpal-playground`: the public repo shown in the read-only demo (leave unset to turn the demo off) |
+| `REVIEWS_PER_INSTALLATION_PER_DAY` | optional | | AI reviews per installation per day (default `10`) |
+| `REVIEWS_PER_DAY` | optional | | AI reviews per day for everyone together (default `100`), so one busy day can't use up the Groq quota |
+| `MAX_PR_FILES` | optional | | PRs with more changed files are skipped with a comment (default `30`) |
+| `MAX_PR_LINES` | optional | | PRs with more added + deleted lines are skipped with a comment (default `3000`) |
 | `API_ORIGIN` | | ✅ | `https://<api>.onrender.com` (no trailing slash) |
-| `PUBLIC_SIGNIN` | | optional | leave unset while the GitHub App is private ("View demo" is the main button); `true` once anyone can sign in. Needs a redeploy to change |
+| `PUBLIC_SIGNIN` | | optional | `true` once the GitHub App is public: "Sign in with GitHub" becomes the main button, "View demo" the second one. Unset: "View demo" is the main button. Needs a redeploy to change |
 
 - Render sets `PORT` by itself.
 - `DASHBOARD_ORIGIN` and `NEXT_PUBLIC_API_URL` are not used any more.
 - If something required is missing, the server refuses to start. Its log then lists exactly
-  which names are missing (never the values).
+  which names are missing (never the values). The same goes for a limit that is set but isn't a
+  positive whole number.
+- Limits reset at midnight UTC. Webhook reviews and dashboard re-runs both count.
 
 ---
 
@@ -121,7 +127,14 @@ Click **Deploy**.
 
 ## 3. GitHub App
 
-GitHub → Settings → Developer settings → GitHub Apps → your app → **Edit**.
+GitHub → Settings → Developer settings → GitHub Apps → **ReviewPal AI** → **Edit**.
+(The app's public page is `https://github.com/apps/reviewpal-ai`.)
+
+**Permissions & events**
+- [ ] Repository permissions: **Pull requests: Read and write** (Metadata: Read-only is added by GitHub).
+- [ ] Subscribe to events: **Pull request**. That covers opened, new commits, reopened and "ready for review".
+- Install and uninstall events (`installation`, `installation_repositories`) need no ticking: GitHub sends
+  them to every app automatically, and they keep the database in sync (see "Going public" below).
 
 **General → Identifying and authorizing users**
 - [ ] Add a second **Redirect URI**: `https://<dashboard>.vercel.app/auth/callback`
@@ -188,6 +201,59 @@ This covers deploys and any missed ping.
   Render shows the service as sleeping, open a PR, and resume the cron job. Within a few minutes the
   wake-up redelivers the missed webhook and the review appears. Log line: `Asked GitHub to redeliver 1 missed webhook(s)`.
 
+## 6. Going public
+
+Until now the GitHub App is private: only your account can install it or sign in. These steps let anyone
+install **ReviewPal AI**, with the daily limits protecting the free Groq quota.
+
+**What the code already does**
+- **Limits:** at most `REVIEWS_PER_INSTALLATION_PER_DAY` reviews per installation and `REVIEWS_PER_DAY` in total, each day
+  (UTC). PRs over `MAX_PR_FILES` files or `MAX_PR_LINES` lines are skipped. A skipped PR doesn't call the AI: it gets
+  one short comment ("Daily review limit reached…" or "…too large…"), at most once per PR, and shows as
+  **Skipped** on the dashboard.
+- **Ignored:** PRs opened by bots, and drafts. A draft is reviewed when it's marked ready for review.
+- **Install sync:** installing ReviewPal adds its repos. Removing a repo, or uninstalling, **deletes** those repos'
+  reviews, files, comments and notices (code: `src/installations.ts`).
+- **Onboarding:** "Install ReviewPal on your repos" in the sidebar and on the empty dashboard, and a public `/privacy` page.
+
+**⚠️ Shared database.** Local and production use the same Neon database. The `usage_limits` migration only adds
+things (a status value, a column, two tables, indexes), so it deletes nothing. Render applies migrations with
+`migrate:deploy`, which never resets a database. Don't run `npm run db:migrate` (`migrate dev`) against the
+shared database: if it finds differences, it offers to **reset** it.
+
+**Checklist, in this order**
+1. [ ] **Push** the code to `master`. Vercel and Render both start deploying.
+   - The dashboard must be live **before or together with** the API: an older dashboard has no "Skipped" badge and
+     breaks on a skipped review. If Render finishes first, nothing goes wrong until a review is skipped. To be safe,
+     wait for Vercel's deploy to finish before testing.
+2. [ ] **Render:** the limit variables are optional (defaults 10 / 100 / 30 / 3000). Add them only to change a value.
+   Check the deploy log: `migrate:deploy` says the migration is applied (or that there's nothing to apply), then
+   `ReviewPal running on port 10000`.
+3. [ ] **GitHub App → Permissions & events:** Pull requests: Read and write, and the Pull request event (step 3).
+4. [ ] **GitHub App → Advanced → Danger zone → Make public.** Anyone can now install it from
+   `https://github.com/apps/reviewpal-ai`. You can make it private again later, as long as only your account has it installed.
+5. [ ] **Vercel:** set `PUBLIC_SIGNIN` = `true` (Production), then **Redeploy**. The value is read when the page is
+   built, so saving it isn't enough.
+6. [ ] Do the smoke test below.
+
+**Smoke test** (on production; webhooks go to Render, not your tunnel)
+- Use a **separate test repo, `reviewpal-test`**, for anything that removes data. **Never remove `reviewpal-playground`**:
+  it's the `DEMO_REPO`, and its reviews power the public demo.
+- [ ] Render: set `REVIEWS_PER_INSTALLATION_PER_DAY` = `1` (saving restarts the service).
+- [ ] Add `reviewpal-test` to the installation (GitHub → Settings → Applications → ReviewPal AI → Configure).
+  The Render log shows `installation …: 1 repo(s) added, 0 removed`.
+- [ ] Open a PR in `reviewpal-test`. It's reviewed as usual (unless today's one review is already used up).
+- [ ] Push another commit. The PR gets **one** "Daily review limit reached" comment, and the dashboard shows **Skipped**
+  with the explanation. Push a third time: no new comment.
+- [ ] Open a **draft** PR. Nothing happens (log: `Not reviewing …: draft`). Mark it ready for review: it's skipped,
+  because the limit is still reached, and it gets its own single comment.
+- [ ] *(Optional)* A PR with more than 30 files or 3000 changed lines gets one "too large" comment.
+- [ ] Remove `reviewpal-test` from the installation. The log shows `… 0 repo(s) added, 1 removed`, and its reviews
+  disappear from the dashboard. The demo (`reviewpal-playground`) is unchanged.
+- [ ] Sign-in page in a private window: **Sign in with GitHub** is the main button, **View demo** the second one,
+  and the **Privacy** link opens `/privacy` without signing in.
+- [ ] Render: set `REVIEWS_PER_INSTALLATION_PER_DAY` back to `10` (or delete it: the default is 10).
+
 ## Troubleshooting
 
 | What you see | Likely cause |
@@ -204,6 +270,11 @@ This covers deploys and any missed ping.
 | Signing in locally signs you out in production (or the other way round) | Shared database with two different `TOKEN_ENCRYPTION_KEY`s: use the same key on both (step 0) |
 | **View demo** shows "The demo isn't available right now." | `DEMO_REPO` isn't set on Render (or the service wasn't restarted after setting it) |
 | Demo shows no reviews | `DEMO_REPO` has a typo, or that repo has no reviews in this database yet |
+| Render log: `Could not post the notice on …: Resource not accessible by integration` | The app can't comment on that PR. Add **Issues: Read and write** under Permissions & events, then accept the new permission on each installation (GitHub emails the owners) |
+| No "Install ReviewPal on your repos" button, or it opens the app's old name | The server asks GitHub for the app's address once and remembers it: restart the service (**Manual Deploy → Restart service**) after renaming the app |
+| Every PR is "Skipped" straight away | `REVIEWS_PER_DAY` or `REVIEWS_PER_INSTALLATION_PER_DAY` is set very low (e.g. still `1` after the smoke test) |
+| Sign-in page still shows "View demo" first | `PUBLIC_SIGNIN` was set on Vercel without a redeploy, or isn't exactly `true` |
+| A removed repo's reviews are still listed | GitHub's delivery for the removal failed: check **Advanced → Recent Deliveries** and click **Redeliver** |
 
 ## Updating later
 

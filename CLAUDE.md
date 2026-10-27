@@ -47,7 +47,13 @@ for repos where the app is installed and they have access.
   that failed in the last 6 hours (Render's free tier sleeps; GitHub waits only 10s)
 - `src/pipeline.ts`: `runReview(payload)` (webhook: creates the pending Review) ->
   `processReview(id)` (files -> AI -> DB -> post to GitHub; also used by re-runs),
-  `prepareRerun()`, `markStuckReviews()` (pending > 10 min since `startedAt` -> failed)
+  `prepareRerun()` (obeys the limits too), skipped reviews (`status: skipped` + `skipReason`), `markStuckReviews()` (pending > 10 min since `startedAt` -> failed)
+- `src/limits.ts`: which PRs get reviewed (bots, drafts, size) and the daily limits
+  (`REVIEWS_PER_INSTALLATION_PER_DAY`, `REVIEWS_PER_DAY`, `MAX_PR_FILES`, `MAX_PR_LINES`; reset at midnight UTC), notice texts (pure)
+- `src/usage.ts`: `reserveAiUse()` (counts `AiUsage` rows under a Postgres advisory lock) and `notifyPullRequestOnce()`
+  (a `PrNotice` row means "already commented", so at most one notice per PR and kind)
+- `src/installations.ts`: `installation` / `installation_repositories` webhooks keep `Repo` in sync; removing a repo
+  or uninstalling deletes its data (cascades from `Repo`)
 - `src/review.ts`: `reviewFiles()` calls Groq, validates the JSON with zod, retries once
 - `src/retry.ts`: which AI errors are retried (429, 5xx, network, bad JSON/shape) and `withOneRetry`
 - `src/stuck.ts`: the stuck-review rule (pure)
@@ -70,7 +76,8 @@ for repos where the app is installed and they have access.
     there**. Every other address shows `web/app/not-found.tsx` (404; "Go to overview" or "View demo")
   - `web/app/sign-in/`: "View demo" is the main button unless `PUBLIC_SIGNIN=true` (read when the page is
     built, so a change on Vercel needs a redeploy). The GitHub App is private: other accounts get a 404 from GitHub
-  - `web/components/`: UI pieces; `web/components/review/`: diff view, comment cards, re-run controls
+  - `web/app/privacy/`: the public privacy page (no sidebar, not in the proxy matcher). Keep it in step with what's stored
+  - `web/components/`: UI pieces (`InstallButton.tsx`: link to the GitHub App's install page from `/api/me`); `web/components/review/`: diff view, comment cards, re-run controls
   - `web/lib/`: API client (`api.ts`: CSRF header on changes, 401 -> `/sign-in`), `useApi` hook
     (`retry()` shows loading, `refresh()` is quiet), diff parser, time helpers
   - Read `web/AGENTS.md` first: this Next.js version differs from older docs
@@ -86,6 +93,10 @@ for repos where the app is installed and they have access.
 - `npm test` / `npm run test:watch`: server tests; `npm run test:all`: server + dashboard tests
 - `npm run build` / `npm start`: production build to `dist/` and run it (what Render does)
 - `npm run migrate:deploy`: apply pending migrations without prompts (production; Render runs it in its build)
+- **Local and production share one Neon database**: never run `migrate dev` against it, not even with `--create-only`
+  (both can offer a reset). To create a migration, point `DIRECT_URL` at a throwaway Neon branch, run `migrate dev` there,
+  check the SQL only adds things, then apply it to the shared database with `migrate:deploy` (never resets). If a step
+  would drop or reset data, stop and ask the owner
 - `cd web && npm run dev`: start the dashboard on port 3001
 - `cd web && npm run lint` / `npm run build` / `npm test`: check the dashboard
 
