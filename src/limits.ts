@@ -89,6 +89,11 @@ export function noticeKind(reason: SkipReason): 'too_large' | 'limit' {
   return reason === 'too_large' ? 'too_large' : 'limit';
 }
 
+// "1 review", "10 reviews": the word in singular only for exactly one
+export function count(n: number, word: string): string {
+  return `${n} ${n === 1 ? word : `${word}s`}`;
+}
+
 // The short, friendly comment posted on the PR instead of a review
 export function noticeText(reason: SkipReason, limits: Limits, size?: PrSize): string {
   const footer = '\n\n<sub>ReviewPal</sub>';
@@ -96,14 +101,14 @@ export function noticeText(reason: SkipReason, limits: Limits, size?: PrSize): s
     case 'too_large':
       return (
         `ReviewPal didn't review this pull request because it's too large` +
-        (size ? ` (${size.changedFiles} files and ${size.changedLines} changed lines;` : ' (') +
-        ` the limits are ${limits.maxFiles} files and ${limits.maxLines} lines). ` +
+        (size ? ` (${count(size.changedFiles, 'file')} and ${count(size.changedLines, 'changed line')};` : ' (') +
+        ` the limits are ${count(limits.maxFiles, 'file')} and ${count(limits.maxLines, 'line')}). ` +
         'Smaller pull requests are easier to review, for people and for AI.' +
         footer
       );
     case 'installation_limit':
       return (
-        `ReviewPal has reached today's review limit for this account (${limits.perInstallationPerDay} reviews a day), ` +
+        `ReviewPal has reached today's review limit for this account (${count(limits.perInstallationPerDay, 'review')} a day), ` +
         "so this pull request wasn't reviewed. Limits reset at midnight UTC: push a new commit after that to get a review." +
         footer
       );
@@ -119,7 +124,7 @@ export function noticeText(reason: SkipReason, limits: Limits, size?: PrSize): s
 // What a re-run that's refused says in the dashboard
 export function rerunRefusal(reason: SkipReason, limits: Limits): string {
   if (reason === 'too_large') {
-    return `This pull request is too large to review (the limits are ${limits.maxFiles} files and ${limits.maxLines} lines).`;
+    return `This pull request is too large to review (the limits are ${count(limits.maxFiles, 'file')} and ${count(limits.maxLines, 'line')}).`;
   }
   return 'Daily review limit reached. Try again after midnight UTC.';
 }

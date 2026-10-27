@@ -7,6 +7,7 @@ import {
   pullRequestDecision,
   quotaDecision,
   readLimits,
+  rerunRefusal,
   sizeDecision,
   startOfUtcDay,
   type PullRequestEvent,
@@ -123,5 +124,14 @@ describe('days and notices', () => {
     expect(noticeText('too_large', limits, { changedFiles: 42, changedLines: 900 })).toContain('42 files and 900 changed lines');
     expect(noticeText('installation_limit', limits)).toContain('10 reviews a day');
     expect(noticeText('global_limit', limits)).toContain('midnight UTC');
+  });
+
+  it('says "1 review a day", not "1 reviews", when the limit is 1', () => {
+    const one = { ...limits, perInstallationPerDay: 1, maxFiles: 1, maxLines: 1 };
+    expect(noticeText('installation_limit', one)).toContain('(1 review a day)');
+    expect(noticeText('too_large', one, { changedFiles: 2, changedLines: 1 })).toContain(
+      '(2 files and 1 changed line; the limits are 1 file and 1 line)'
+    );
+    expect(rerunRefusal('too_large', one)).toContain('the limits are 1 file and 1 line');
   });
 });
